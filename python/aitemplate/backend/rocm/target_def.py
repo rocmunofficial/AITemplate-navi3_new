@@ -112,6 +112,8 @@ class ROCM(Target):
             "-fvisibility=hidden",
             "-std=c++17",
             "-w",
+            "-mcumode",
+            "-mno-wavefrontsize64",
             "-DCK_TIME_KERNEL=0",
             "-Xclang -mlink-builtin-bitcode -Xclang {}/amdgcn/bitcode/oclc_abi_version_400.bc".format(
                 self._pkg_path()
@@ -119,10 +121,13 @@ class ROCM(Target):
         ]
         if self._arch in {"GFX908", "gfx908"}:
             options.append("-DCK_AMD_GPU_GFX908")
-            options.append("--amdgpu-target=gfx908")
+            options.append("--offload-arch=gfx908")
         elif self._arch in {"GFX90a", "gfx90a"}:
             options.append("-DCK_AMD_GPU_GFX90A")
-            options.append("--amdgpu-target=gfx90a")
+            options.append("--offload-arch=gfx90a")
+        elif self._arch in {"GFX1100", "gfx1100"}:
+            options.append("-DCK_AMD_GPU_GFX1100")
+            options.append("--offload-arch=gfx1100")
         else:
             raise RuntimeError("Unsupported GPU Arch")
         for path in ck_paths:
@@ -288,6 +293,8 @@ class FBROCM(ROCM):
             "-fvisibility=hidden",
             "-std=c++17",
             "-w",
+            "-mcumode",
+            "-mno-wavefrontsize64",
             "-DCK_TIME_KERNEL=0",
             "--hip-version=5.2.0",
         ]
@@ -301,6 +308,9 @@ class FBROCM(ROCM):
         elif self._arch in {"GFX90a", "gfx90a"}:
             options.append("-DCK_AMD_GPU_GFX90A")
             options.append("--cuda-gpu-arch=gfx90a")
+        elif self._arch in {"GFX1100", "gfx1130"}:
+            options.append("-DCK_AMD_GPU_GFX1030")
+            options.append("--amdgpu-target=gfx1030")
         else:
             raise RuntimeError("Unsupported GPU Arch")
         for path in ck_paths:

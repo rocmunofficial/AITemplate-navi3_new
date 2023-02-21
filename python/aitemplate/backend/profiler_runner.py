@@ -285,6 +285,7 @@ class ProfilerRunner:
         future = self._executor.submit(
             run_task, cmds, self._device_queue, self._dev_select_flag
         )
+        print(f"The result of profile executor is {future.result()}")
 
         # done callbacks are used to collect profiler results for postprocessing
         # they are launched asynchronously, in a separate thread,

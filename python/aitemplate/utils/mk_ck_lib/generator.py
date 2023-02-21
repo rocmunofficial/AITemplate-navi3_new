@@ -23,6 +23,7 @@ from . import (
     library,
     softmax_operation as softmax,
 )
+from aitemplate.backend.target import Target
 
 ###########################################################################################################
 # Convolution for 2D Fwd operations
@@ -417,7 +418,12 @@ def CreateGemmRRROperator(manifest):
     )
     element_op = library.TensorOperation.PassThrough
 
-    tile_descriptions = [
+    if Target.current().get_device_name() == "gfx1100":
+        tile_descriptions = [
+        gemm.TileDesc(256, 128,  256, 8, 8, 0, 16, 16, 4, 4),
+        ]
+    else:
+        tile_descriptions = [
         gemm.TileDesc(256, 256, 128, 32, 8, 2, 32, 32, 4, 2),
         gemm.TileDesc(256, 256, 128, 32, 8, 8, 32, 32, 4, 2),
         gemm.TileDesc(256, 128, 256, 32, 8, 2, 32, 32, 2, 4),
@@ -434,7 +440,7 @@ def CreateGemmRRROperator(manifest):
         gemm.TileDesc(256, 128, 64, 32, 8, 8, 32, 32, 2, 1),
         gemm.TileDesc(256, 64, 128, 32, 8, 2, 32, 32, 1, 2),
         gemm.TileDesc(256, 64, 128, 32, 8, 8, 32, 32, 1, 2),
-    ]
+        ]
 
     b_block_descriptions = [
         gemm.BlockTransferDesc([8, 32, 1], [0, 2, 1], [0, 2, 1], 1, 4, 2, 0),
@@ -485,6 +491,12 @@ def CreateGemmRRROperator(manifest):
         gemm.GemmSpecialization.MNKPadding,
     ]
     operations = []
+
+    if Target.current().get_device_name() == "gfx1100":
+        op_type = gemm.OpType.DeviceGemmWmma_CShuffle 
+    else:
+        op_type = gemm.OpType.DeviceGemmXdl_CShuffle
+
     for gemm_spec in gemm_specialization:
         for tile_desc, a_block_desc, b_block_desc, c_block_desc in zip(
             tile_descriptions,
@@ -495,7 +507,7 @@ def CreateGemmRRROperator(manifest):
             new_operation = gemm.GemmOperation(
                 operation_kind=operation_kind,
                 extra_kind=element_op,
-                xdl_op_type=gemm.XdlOpType.DeviceGemmXdl_CShuffle,
+                op_type=op_type,
                 A=a_element_desc,
                 B=b_element_desc,
                 C=c_element_desc,
@@ -526,7 +538,23 @@ def CreateGemmRCROperator(manifest):
     )
     element_op = library.TensorOperation.PassThrough
 
-    tile_descriptions = [
+    if Target.current().get_device_name() == "gfx1100":
+        tile_descriptions = [
+        gemm.TileDesc(256, 128,  256, 8, 8, 0, 16, 16, 4, 4),
+        # gemm.TileDesc(256, 512,  16, 4, 8, 0, 16, 16, 4, 1),
+        # gemm.TileDesc(256, 256,  64, 8, 8, 0, 16, 16, 2, 4),
+        # gemm.TileDesc(256, 256,  64, 4, 8, 0, 16, 16, 2, 4),
+        # gemm.TileDesc(256, 256, 128, 4, 8, 0, 16, 16, 4, 4),
+        # gemm.TileDesc(256, 256, 128, 8, 8, 0, 16, 16, 4, 4),
+        # gemm.TileDesc(256, 128, 256, 4, 8, 0, 16, 16, 4, 4),
+        # gemm.TileDesc(256, 128, 126, 4, 8, 0, 16, 16, 4, 4),
+        # gemm.TileDesc(256, 128, 256, 8, 8, 0, 16, 16, 4, 4),
+        # gemm.TileDesc(128, 128,  64, 8, 8, 0, 16, 16, 2, 4),
+        # # gemm.TileDesc( 96,  96,  48, 8, 8, 0, 16, 16, 6, 1),
+        # gemm.TileDesc( 64,  64,  64, 8, 8, 0, 16, 16, 4, 2),
+    ]
+    else: 
+        tile_descriptions = [
         gemm.TileDesc(256, 256, 128, 32, 8, 8, 32, 32, 4, 2),
         gemm.TileDesc(256, 128, 256, 32, 8, 8, 32, 32, 2, 4),
         gemm.TileDesc(128, 128, 128, 32, 8, 8, 32, 32, 4, 2),
@@ -575,6 +603,12 @@ def CreateGemmRCROperator(manifest):
         gemm.GemmSpecialization.MNKPadding,
     ]
     operations = []
+
+    if Target.current().get_device_name() == "gfx1100":
+        op_type = gemm.OpType.DeviceGemmWmma_CShuffle 
+    else:
+        op_type = gemm.OpType.DeviceGemmXdl_CShuffle
+                
     for gemm_spec in gemm_specialization:
         for tile_desc, block_desc, c_block_desc in zip(
             tile_descriptions, block_descriptions, c_block_descriptions
@@ -582,7 +616,7 @@ def CreateGemmRCROperator(manifest):
             new_operation = gemm.GemmOperation(
                 operation_kind=operation_kind,
                 extra_kind=element_op,
-                xdl_op_type=gemm.XdlOpType.DeviceGemmXdl_CShuffle,
+                op_type=op_type,
                 A=a_element_desc,
                 B=b_element_desc,
                 C=c_element_desc,
@@ -638,21 +672,26 @@ def CreateGemmRCRBillinearOperator(manifest, c_element_op):
     e_dtype = library.DataType.f16
     element_op = library.TensorOperation.PassThrough
     # 0 indicates not print
-    tile_descriptions = [
-        gemm.TileDesc(256, 256, 128, 32, 8, 8, 32, 32, 4, 2),
-        gemm.TileDesc(256, 128, 256, 32, 8, 8, 32, 32, 2, 4),
-        gemm.TileDesc(128, 128, 128, 32, 8, 8, 32, 32, 4, 2),
-        gemm.TileDesc(256, 128, 128, 32, 8, 8, 32, 32, 2, 2),
-        gemm.TileDesc(128, 128, 64, 32, 8, 8, 32, 32, 2, 2),
-        gemm.TileDesc(128, 64, 128, 32, 8, 8, 32, 32, 2, 2),
-        gemm.TileDesc(64, 64, 64, 32, 8, 8, 32, 32, 2, 2),
-        gemm.TileDesc(256, 128, 64, 32, 8, 8, 32, 32, 2, 1),
-        gemm.TileDesc(256, 64, 128, 32, 8, 8, 32, 32, 1, 2),
-        gemm.TileDesc(128, 128, 32, 32, 8, 8, 32, 32, 2, 1),
-        gemm.TileDesc(128, 32, 128, 32, 8, 8, 32, 32, 1, 2),
-        gemm.TileDesc(64, 64, 32, 32, 8, 8, 32, 32, 2, 1),
-        gemm.TileDesc(64, 32, 64, 32, 8, 8, 32, 32, 1, 2),
-    ]
+    if Target.current().get_device_name() == "gfx1100":
+        tile_descriptions = [
+            gemm.TileDesc(256, 128, 256, 8, 8, 0, 16, 16, 4, 4),
+        ]
+    else:
+        tile_descriptions = [
+            gemm.TileDesc(256, 256, 128, 32, 8, 8, 32, 32, 4, 2),
+            gemm.TileDesc(256, 128, 256, 32, 8, 8, 32, 32, 2, 4),
+            gemm.TileDesc(128, 128, 128, 32, 8, 8, 32, 32, 4, 2),
+            gemm.TileDesc(256, 128, 128, 32, 8, 8, 32, 32, 2, 2),
+            gemm.TileDesc(128, 128, 64, 32, 8, 8, 32, 32, 2, 2),
+            gemm.TileDesc(128, 64, 128, 32, 8, 8, 32, 32, 2, 2),
+            gemm.TileDesc(64, 64, 64, 32, 8, 8, 32, 32, 2, 2),
+            gemm.TileDesc(256, 128, 64, 32, 8, 8, 32, 32, 2, 1),
+            gemm.TileDesc(256, 64, 128, 32, 8, 8, 32, 32, 1, 2),
+            gemm.TileDesc(128, 128, 32, 32, 8, 8, 32, 32, 2, 1),
+            gemm.TileDesc(128, 32, 128, 32, 8, 8, 32, 32, 1, 2),
+            gemm.TileDesc(64, 64, 32, 32, 8, 8, 32, 32, 2, 1),
+            gemm.TileDesc(64, 32, 64, 32, 8, 8, 32, 32, 1, 2),
+        ]
 
     block_descriptions = []
     c_block_descriptions = []
@@ -687,6 +726,12 @@ def CreateGemmRCRBillinearOperator(manifest, c_element_op):
         gemm.GemmSpecialization.MNKPadding,
     ]
     operations = []
+
+    if Target.current().get_device_name() == "gfx1100":
+        op_type = gemm.OpType.DeviceGemmMultipleD_Wmma_CShuffle 
+    else:
+        op_type = gemm.OpType.DeviceGemmMultipleD_Xdl_CShuffle
+
     for gemm_spec in gemm_specialization:
         for tile_desc, block_desc, c_block_desc in zip(
             tile_descriptions, block_descriptions, c_block_descriptions
@@ -694,7 +739,7 @@ def CreateGemmRCRBillinearOperator(manifest, c_element_op):
             new_operation = gemm.GemmOperation(
                 operation_kind=operation_kind,
                 extra_kind=c_element_op,
-                xdl_op_type=gemm.XdlOpType.DeviceGemmMultipleD_Xdl_CShuffle,
+                op_type=op_type,
                 A=a_element_desc,
                 B=b_element_desc,
                 C=c_element_desc,
@@ -729,7 +774,7 @@ def CreateGemmRCRBillinearOperator(manifest, c_element_op):
             new_operation = gemm.GemmOperation(
                 operation_kind=operation_kind,
                 extra_kind=c_element_op,
-                xdl_op_type=gemm.XdlOpType.DeviceGemmMultipleD_Xdl_CShuffle,
+                op_type=op_type,
                 A=a_element_desc,
                 B=b_element_desc,
                 C=c_element_desc,
@@ -762,7 +807,7 @@ def CreateGemmRCRBillinearOperator(manifest, c_element_op):
             new_operation = gemm.GemmOperation(
                 operation_kind=operation_kind,
                 extra_kind=c_element_op,
-                xdl_op_type=gemm.XdlOpType.DeviceGemmMultipleD_Xdl_CShuffle,
+                op_type=op_type,
                 A=a_element_desc,
                 B=b_element_desc,
                 C=c_element_desc,
@@ -843,7 +888,7 @@ def CreateBmmRCROperator(manifest):
             new_operation = gemm.GemmOperation(
                 operation_kind=operation_kind,
                 extra_kind=element_op,
-                xdl_op_type=gemm.XdlOpType.DeviceBatchedGemmXdl,
+                op_type=gemm.OpType.DeviceBatchedGemmXdl,
                 A=a_element_desc,
                 B=b_element_desc,
                 C=c_element_desc,
@@ -932,7 +977,7 @@ def CreateGemmRCRPermOperator(manifest, c_element_op):
             new_operation = gemm.GemmOperation(
                 operation_kind=operation_kind,
                 extra_kind=c_element_op,
-                xdl_op_type=gemm.XdlOpType.DeviceGemmBiasCPermute_Xdl,
+                op_type=gemm.OpType.DeviceGemmBiasCPermute_Xdl,
                 A=a_element_desc,
                 B=b_element_desc,
                 C=c_element_desc,
@@ -1048,7 +1093,7 @@ def CreateGemmRRRPermOperator(manifest, c_element_op):
             new_operation = gemm.GemmOperation(
                 operation_kind=operation_kind,
                 extra_kind=c_element_op,
-                xdl_op_type=gemm.XdlOpType.DeviceGemmBiasCPermute_Xdl,
+                op_type=gemm.OpType.DeviceGemmBiasCPermute_Xdl,
                 A=a_element_desc,
                 B=b_element_desc,
                 C=c_element_desc,
@@ -1133,6 +1178,12 @@ def CreateGemmRCRm2n3PermOperator(manifest, c_element_op):
         gemm.GemmSpecialization.MNKPadding,
     ]
     operations = []
+
+    if Target.current().get_device_name() == "gfx1100":
+        op_type = gemm.OpType.DeviceBatchedContractionMultipleD_Wmma_CShuffle 
+    else:
+        op_type = gemm.OpType.DeviceBatchedContractionMultipleD_Xdl_CShuffle
+
     for gemm_spec in gemm_specialization:
         for tile_desc, block_desc, c_block_desc in zip(
             tile_descriptions, block_descriptions, c_block_descriptions
@@ -1140,7 +1191,7 @@ def CreateGemmRCRm2n3PermOperator(manifest, c_element_op):
             new_operation = gemm.GemmOperation(
                 operation_kind=operation_kind,
                 extra_kind=c_element_op,
-                xdl_op_type=gemm.XdlOpType.DeviceBatchedContractionMultipleD_Xdl_CShuffle,
+                op_type=op_type,
                 A=a_element_desc,
                 B=b_element_desc,
                 C=c_element_desc,
@@ -1225,6 +1276,12 @@ def CreateGemmRCRm3n2PermOperator(manifest, c_element_op):
         gemm.GemmSpecialization.MNKPadding,
     ]
     operations = []
+
+    if Target.current().get_device_name() == "gfx1100":
+        op_type = gemm.OpType.DeviceBatchedContractionMultipleD_Wmma_CShuffle 
+    else:
+        op_type = gemm.OpType.DeviceBatchedContractionMultipleD_Xdl_CShuffle
+
     for gemm_spec in gemm_specialization:
         for tile_desc, block_desc, c_block_desc in zip(
             tile_descriptions, block_descriptions, c_block_descriptions
@@ -1232,7 +1289,7 @@ def CreateGemmRCRm3n2PermOperator(manifest, c_element_op):
             new_operation = gemm.GemmOperation(
                 operation_kind=operation_kind,
                 extra_kind=c_element_op,
-                xdl_op_type=gemm.XdlOpType.DeviceBatchedContractionMultipleD_Xdl_CShuffle,
+                op_type=op_type,
                 A=a_element_desc,
                 B=b_element_desc,
                 C=c_element_desc,
@@ -1322,7 +1379,7 @@ def CreateBmmRCRPermOperator(manifest):
             new_operation = gemm.GemmOperation(
                 operation_kind=operation_kind,
                 extra_kind=element_op,
-                xdl_op_type=gemm.XdlOpType.DeviceBatchedGemmCPermuteXdl,
+                op_type=gemm.OpType.DeviceBatchedGemmCPermuteXdl,
                 A=a_element_desc,
                 B=b_element_desc,
                 C=c_element_desc,
@@ -1343,7 +1400,7 @@ def CreateBmmRCRPermOperator(manifest):
 def CreateBmmSoftmaxBmmOperator(
     manifest,
     operation_kind=library.GemmKind.BatchGemmSoftmaxGemm,
-    xdl_op_type=gemm.XdlOpType.DeviceBatchedGemmSoftmaxGemm_Xdl_CShuffle,
+    op_type=gemm.OpType.DeviceBatchedGemmSoftmaxGemm_Xdl_CShuffle,
 ):
     a_element_desc = library.TensorDesc(
         library.DataType.f16, library.LayoutType.RowMajor
@@ -1425,7 +1482,7 @@ def CreateBmmSoftmaxBmmOperator(
         new_operation = gemm.GemmOperation(
             operation_kind=operation_kind,
             extra_kind=element_op,
-            xdl_op_type=xdl_op_type,
+            op_type=op_type,
             A=a_element_desc,
             B=b_element_desc,
             C=c_element_desc,
@@ -1447,7 +1504,7 @@ def CreateBmmSoftmaxBmmOperator(
 def CreateBmmSoftmaxBmmPermOperator(
     manifest,
     operation_kind=library.GemmKind.BatchGemmSoftmaxGemmPermute,
-    xdl_op_type=gemm.XdlOpType.DeviceBatchedGemmSoftmaxGemmPermute_Xdl_CShuffle,
+    op_type=gemm.OpType.DeviceBatchedGemmSoftmaxGemmPermute_Xdl_CShuffle,
     causal_mask=None,
 ):
     a_element_desc = library.TensorDesc(
@@ -1547,7 +1604,7 @@ def CreateBmmSoftmaxBmmPermOperator(
         new_operation = gemm.GemmOperation(
             operation_kind=operation_kind,
             extra_kind=extra_op,
-            xdl_op_type=xdl_op_type,
+            op_type=op_type,
             A=a_element_desc,
             B=b_element_desc,
             C=c_element_desc,
@@ -1650,7 +1707,7 @@ def CreateBmmRRROperator(manifest):
             new_operation = gemm.GemmOperation(
                 operation_kind=operation_kind,
                 extra_kind=element_op,
-                xdl_op_type=gemm.XdlOpType.DeviceBatchedGemmXdl,
+                op_type=gemm.OpType.DeviceBatchedGemmXdl,
                 A=a_element_desc,
                 B=b_element_desc,
                 C=c_element_desc,
@@ -1762,7 +1819,7 @@ def CreateBmmRRRBillinearOperator(manifest, c_element_op):
             new_operation = gemm.GemmOperation(
                 operation_kind=operation_kind,
                 extra_kind=c_element_op,
-                xdl_op_type=gemm.XdlOpType.DeviceBatchedGemmMultiD_Xdl,
+                op_type=gemm.OpType.DeviceBatchedGemmMultiD_Xdl,
                 A=a_element_desc,
                 B=b_element_desc,
                 C=c_element_desc,
@@ -1878,7 +1935,7 @@ def CreateBmmCCRBillinearOperator(manifest, c_element_op):
             new_operation = gemm.GemmOperation(
                 operation_kind=operation_kind,
                 extra_kind=c_element_op,
-                xdl_op_type=gemm.XdlOpType.DeviceBatchedGemmMultiD_Xdl,
+                op_type=gemm.OpType.DeviceBatchedGemmMultiD_Xdl,
                 A=a_element_desc,
                 B=b_element_desc,
                 C=c_element_desc,
@@ -1994,7 +2051,7 @@ def CreateBmmCRRBillinearOperator(manifest, c_element_op):
             new_operation = gemm.GemmOperation(
                 operation_kind=operation_kind,
                 extra_kind=c_element_op,
-                xdl_op_type=gemm.XdlOpType.DeviceBatchedGemmMultiD_Xdl,
+                op_type=gemm.OpType.DeviceBatchedGemmMultiD_Xdl,
                 A=a_element_desc,
                 B=b_element_desc,
                 C=c_element_desc,
@@ -2106,7 +2163,7 @@ def CreateBmmRRRPermOperator(manifest):
             new_operation = gemm.GemmOperation(
                 operation_kind=operation_kind,
                 extra_kind=element_op,
-                xdl_op_type=gemm.XdlOpType.DeviceBatchedGemmCPermuteXdl,
+                op_type=gemm.OpType.DeviceBatchedGemmCPermuteXdl,
                 A=a_element_desc,
                 B=b_element_desc,
                 C=c_element_desc,
@@ -2188,7 +2245,7 @@ def CreateBmmCCROperator(manifest):
             new_operation = gemm.GemmOperation(
                 operation_kind=operation_kind,
                 extra_kind=element_op,
-                xdl_op_type=gemm.XdlOpType.DeviceBatchedGemmXdl,
+                op_type=gemm.OpType.DeviceBatchedGemmXdl,
                 A=a_element_desc,
                 B=b_element_desc,
                 C=c_element_desc,
@@ -2261,7 +2318,7 @@ def CreateBmmCRROperator(manifest):
             new_operation = gemm.GemmOperation(
                 operation_kind=operation_kind,
                 extra_kind=element_op,
-                xdl_op_type=gemm.XdlOpType.DeviceBatchedGemmXdl,
+                op_type=gemm.OpType.DeviceBatchedGemmXdl,
                 A=a_element_desc,
                 B=b_element_desc,
                 C=c_element_desc,
@@ -2527,4 +2584,7 @@ def GenerateGFX908(manifest, rocm_version):
 
 
 def GenerateGFX90A(manifest, rocm_version):
+    GenerateTensorOp(manifest)
+
+def GenerateGFX1100(manifest, rocm_version):
     GenerateTensorOp(manifest)
