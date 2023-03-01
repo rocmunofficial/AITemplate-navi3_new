@@ -19,8 +19,6 @@ from unittest.mock import patch
 
 from aitemplate.backend.profiler_runner import ProfilerRunner
 
-from aitemplate.testing import detect_target
-
 
 def dice():
     return randrange(1, 10) / 4
@@ -65,6 +63,7 @@ class ProfilerTestCase(unittest.TestCase):
                     cmds=["sleep", f"{sleep_for}"],
                     process_result_callback=delegate_cb_wrapper(i, sleep_for),
                 )
+                
             pr.join()
 
 
