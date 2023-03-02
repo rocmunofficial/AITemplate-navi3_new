@@ -93,8 +93,8 @@ def benchmark_unet(
     }
 
     ys = []
-    num_ouputs = len(exe_module.get_output_name_to_index_map())
-    for i in range(num_ouputs):
+    num_outputs = len(exe_module.get_output_name_to_index_map())
+    for i in range(num_outputs):
         shape = exe_module.get_output_maximum_shape(i)
         ys.append(torch.empty(shape).cuda().half())
     exe_module.run_with_tensors(inputs, ys)
@@ -172,8 +172,8 @@ def benchmark_clip(
         "input1": position_ids,
     }
     ys = []
-    num_ouputs = len(exe_module.get_output_name_to_index_map())
-    for i in range(num_ouputs):
+    num_outputs = len(exe_module.get_output_name_to_index_map())
+    for i in range(num_outputs):
         shape = exe_module.get_output_maximum_shape(i)
         ys.append(torch.empty(shape).cuda().half())
     exe_module.run_with_tensors(inputs, ys)
@@ -297,7 +297,11 @@ def benchmark_diffusers(local_dir, batch_size, verify, benchmark_pt):
     )
     # UNet
     benchmark_unet(
-        pipe.unet, batch_size=batch_size * 2, benchmark_pt=benchmark_pt, verify=verify
+        pipe.unet,
+        batch_size=batch_size * 2,
+        benchmark_pt=benchmark_pt,
+        verify=verify,
+        hidden_dim=pipe.text_encoder.config.hidden_size,
     )
     # VAE
     benchmark_vae(
