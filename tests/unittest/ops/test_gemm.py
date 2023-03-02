@@ -217,12 +217,15 @@ class GEMMTestCase(unittest.TestCase):
 
         for m in ms:
             X_pt = get_random_torch_tensor([m, k], dtype)
+            X_pt = X_pt.cuda().contiguous()
             W_pt = get_random_torch_tensor([k, n], dtype)
+            W_pt = W_pt.cuda().contiguous()
             Y_pt = torch.matmul(X_pt, W_pt)
             inputs = {"input_0": X_pt, "input_1": W_pt}
             y = get_torch_empty_tensor([m, n], dtype)
+            y = y.cuda().contiguous()
             module.run_with_tensors(inputs, [y])
-            torch.testing.assert_close(Y_pt, y, **tolerance_limits)
+            torch.testing.assert_close(Y_pt.cpu(), y.cpu(), **tolerance_limits)
 
     def test_rrr(self):
         self._test_rrr([256], 128, 32, "static")
