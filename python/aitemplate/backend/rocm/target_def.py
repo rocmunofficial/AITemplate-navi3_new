@@ -310,9 +310,9 @@ class FBROCM(ROCM):
         elif self._arch in {"GFX90a", "gfx90a"}:
             options.append("-DCK_AMD_GPU_GFX90A")
             options.append("--cuda-gpu-arch=gfx90a")
-        elif self._arch in {"GFX1100", "gfx1130"}:
-            options.append("-DCK_AMD_GPU_GFX1030")
-            options.append("--amdgpu-target=gfx1030")
+        elif self._arch in {"GFX1100", "gfx1100"}:
+            options.append("-DCK_AMD_GPU_GFX1100")
+            options.append("--amdgpu-target=gfx1100")
         else:
             raise RuntimeError("Unsupported GPU Arch")
         for path in ck_paths:
