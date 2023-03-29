@@ -1,7 +1,9 @@
 name: AITemplate_ci
 
 on:
-  push:
+  pull request:
+  branches:
+     - 'illsilin/AITemplate/**'
 
 jobs:
   build:
