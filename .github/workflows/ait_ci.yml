@@ -1,7 +1,9 @@
 name: AITemplate_ci
 
 on:
-  push:
+  pull request:
+     tags:
+       - rocm_ci
 
 jobs:
   build:
