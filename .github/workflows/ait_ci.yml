@@ -2,8 +2,8 @@ name: AITemplate_ci
 
 on:
   pull request:
-  branches:
-     - 'illsilin/AITemplate/**'
+     tags:
+       - rocm_ci
 
 jobs:
   build:
