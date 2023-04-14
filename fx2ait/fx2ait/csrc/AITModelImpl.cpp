@@ -21,14 +21,17 @@
 
 #include "ATen/Context.h" // @manual
 #ifdef __HIP_PLATFORM_HCC__
+#include "rocm_device_functions.h"
 #include "ATen/hip/HIPContext.h"
 #include "c10/core/CPUAllocator.h"
 #include "c10/hip/HIPStream.h"
 #else
+#include "cuda_device_functions.h"
 #include "ATen/cuda/CUDAContext.h"
 #include "c10/core/CPUAllocator.h"
 #include "c10/cuda/CUDAStream.h"
 #endif
+
 
 #ifdef FBCODE_AIT
 #include "folly/MapUtil.h"
@@ -160,12 +163,12 @@ AITModelImpl::AITModelImpl(
   // It's not clear what stream we want to use yet. Create a new one.
   // We could alternatively use the default stream, but that could cause extra
   // synchronization.
-  StreamType creation_stream;
-  StreamCreate(&creation_stream, true);
+  ait::StreamType creation_stream;
+  ait::StreamCreate(&creation_stream, true);
   using StreamGuard = std::unique_ptr<
-      std::remove_pointer_t<StreamType>,
-      decltype(&StreamDestroy)>;
-  StreamGuard creation_stream_guard{creation_stream, StreamDestroy};
+      std::remove_pointer_t<ait::StreamType>,
+      decltype(&ait::StreamDestroy)>;
+  StreamGuard creation_stream_guard{creation_stream, ait::StreamDestroy};
 
 #define LOAD_SYMBOL(var, name_str)                                       \
   var = reinterpret_cast<decltype(var)>(dlsym(handle_.get(), name_str)); \
@@ -629,12 +632,12 @@ void AITModelImpl::updateConstantsWithWeights(
     constants.emplace_back(torchToAitData(it->second));
   }
 
-  StreamType constants_stream;
-  StreamCreate(&constants_stream, true);
+  ait::StreamType constants_stream;
+  ait::StreamCreate(&constants_stream, true);
   using StreamGuard = std::unique_ptr<
-      std::remove_pointer_t<StreamType>,
-      decltype(&StreamDestroy)>;
-  StreamGuard constants_stream_guard{constants_stream, StreamDestroy};
+      std::remove_pointer_t<ait::StreamType>,
+      decltype(&ait::StreamDestroy)>;
+  StreamGuard constants_stream_guard{constants_stream, ait::StreamDestroy};
 
   AIT_CHECK(setManyConstantsDoubleBufferFunc_(
       model_handle_,

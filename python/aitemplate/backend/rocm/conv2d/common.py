@@ -742,9 +742,12 @@ def gen_function(
         w_dim0="*out_ch",
         w_dim1="*kernel_h",
         w_dim2="*kernel_w",
-        stride="stride",
-        dilate="dilation",
-        pad="pad",
+        strideh="stride",
+        dilateh="dilation",
+        padh="pad",
+        stridew="stride",
+        dilatew="dilation",
+        padw="pad",
         div="/",
     )
     shape_save_func = shape_save_template.render(
