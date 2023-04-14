@@ -166,27 +166,6 @@ AITModelImpl::AITModelImpl(
       std::remove_pointer_t<StreamType>,
       decltype(&StreamDestroy)>;
   StreamGuard creation_stream_guard{creation_stream, StreamDestroy};
-// #ifdef __HIP_PLATFORM_HCC__
-//   hipStream_t creation_stream;
-//   TORCH_CHECK(
-//       hipStreamCreateWithFlags(&creation_stream, hipStreamNonBlocking) ==
-//       hipSuccess);
-
-//   using StreamGuard = std::unique_ptr<
-//       std::remove_pointer_t<hipStream_t>,
-//       decltype(&hipStreamDestroy)>;
-//   StreamGuard creation_stream_guard{creation_stream, hipStreamDestroy};
-// #else
-//   cudaStream_t creation_stream;
-//   TORCH_CHECK(
-//       cudaStreamCreateWithFlags(&creation_stream, cudaStreamNonBlocking) ==
-//       cudaSuccess);
-
-//   using StreamGuard = std::unique_ptr<
-//       std::remove_pointer_t<cudaStream_t>,
-//       decltype(&cudaStreamDestroy)>;
-//   StreamGuard creation_stream_guard{creation_stream, cudaStreamDestroy};
-// #endif
 
 #define LOAD_SYMBOL(var, name_str)                                       \
   var = reinterpret_cast<decltype(var)>(dlsym(handle_.get(), name_str)); \
@@ -656,27 +635,7 @@ void AITModelImpl::updateConstantsWithWeights(
       std::remove_pointer_t<StreamType>,
       decltype(&StreamDestroy)>;
   StreamGuard constants_stream_guard{constants_stream, StreamDestroy};
-// #ifdef __HIP_PLATFORM_HCC__
-//   hipStream_t constants_stream;
-//   TORCH_CHECK(
-//       hipStreamCreateWithFlags(&constants_stream, hipStreamNonBlocking) ==
-//       hipSuccess);
 
-//   using StreamGuard = std::unique_ptr<
-//       std::remove_pointer_t<hipStream_t>,
-//       decltype(&hipStreamDestroy)>;
-//   StreamGuard constants_stream_guard{constants_stream, hipStreamDestroy};
-// #else
-//   cudaStream_t constants_stream;
-//   TORCH_CHECK(
-//       cudaStreamCreateWithFlags(&constants_stream, cudaStreamNonBlocking) ==
-//       cudaSuccess);
-
-//   using StreamGuard = std::unique_ptr<
-//       std::remove_pointer_t<cudaStream_t>,
-//       decltype(&cudaStreamDestroy)>;
-//   StreamGuard constants_stream_guard{constants_stream, cudaStreamDestroy};
-// #endif
   AIT_CHECK(setManyConstantsDoubleBufferFunc_(
       model_handle_,
       /*stream=*/reinterpret_cast<AITemplateStreamOpaque*>(constants_stream),
