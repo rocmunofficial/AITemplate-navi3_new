@@ -14,9 +14,9 @@
 #
 from typing import Any, List, Optional, Set
 
-from ..base import Operator, Tensor
-from .toposort import toposort
-from .transform_utils import (
+from aitemplate.compiler.base import Operator, Tensor
+from aitemplate.compiler.transform.toposort import toposort
+from aitemplate.compiler.transform.transform_utils import (
     copy_tensor_attributes,
     remove_dst_op_from_tensor,
     replace_tensor,
@@ -100,6 +100,7 @@ def transform_simple_fusion_patterns(
 ) -> List[Tensor]:
     output_tensors = []
     to_remove = set()
+    has_modified = False
     for tensor in sorted_graph:
         if tensor in to_remove:
             to_remove.remove(tensor)
@@ -178,6 +179,7 @@ def transform_simple_fusion_patterns(
 
         # inputs here might not be ready in graph. But we will toposort again
         # at end of pass so it's okay.
+        has_modified = True
         new_tensor = new_op(**src_op._get_op_attributes())(*inputs)
         copy_tensor_attributes(new_tensor, last_tensor)
         if new_tensor._attrs["is_output"]:
@@ -187,5 +189,7 @@ def transform_simple_fusion_patterns(
             remove_dst_op_from_tensor(tensors, dst_op)
         to_remove |= to_remove_candidate
 
-    new_sorted_graph = toposort(output_tensors)
-    return sanitize_sorted_graph(new_sorted_graph)
+    if has_modified:
+        sorted_graph = toposort(output_tensors)
+        sorted_graph = sanitize_sorted_graph(sorted_graph)
+    return sorted_graph

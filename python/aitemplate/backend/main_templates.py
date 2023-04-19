@@ -38,6 +38,7 @@ MODEL_TEMPLATE = jinja2.Template(
 #include <string>
 #include <unordered_map>
 #include <math.h>
+#include <iomanip>
 
 {{ function_decl }}
 
@@ -100,7 +101,6 @@ class {{model_name}} : public ModelBase<{{model_name}}> {
   {{ func }}
       DeviceCheckLastError(__FILE__, __LINE__);
   {% endfor %}
-      DeviceToDeviceCopies(stream);
     }
 
     void ProfileImpl(StreamType stream, size_t iters, const std::string& filename) {
@@ -251,7 +251,7 @@ ModelContainerBase::ModelContainerBase(
 }
 
 ModelContainer* CreateModelContainer(size_t num_runtimes, AITemplateAllocator& allocator) {
-  // num_runtimes, blob_size, workspace_size, num_inputs, num_outputs, num_unbound_constants, param_size, allocator
+  // num_runtimes, num_inputs, num_outputs, num_bound_constants, num_unbound_constants, params_size, allocator
   return new ModelContainer(num_runtimes, {{num_inputs}}, {{num_outputs}}, {{num_bound_constants}}, {{num_unbound_constants}}, {{param_size}}, allocator);
 }
 } // namespace ait

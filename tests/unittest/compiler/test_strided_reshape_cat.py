@@ -22,6 +22,7 @@ from aitemplate.compiler.stable_set import StableSet
 from aitemplate.frontend import IntImm, Tensor
 from aitemplate.testing import detect_target
 from aitemplate.testing.test_utils import (
+    filter_test_cases_by_test_env,
     get_random_torch_tensor,
     get_torch_empty_tensor,
 )
@@ -113,8 +114,16 @@ class StridedReshapeCatTestCase(unittest.TestCase):
                 concat_op._attrs["input_masks"], [False, False, True, False]
             )
         else:
-            np.testing.assert_equal(concat_op_1._attrs["input_masks"], [False, False])
-            np.testing.assert_equal(concat_op_2._attrs["input_masks"], [True, False])
+            Y_src_ops = list(Y_src_ops)
+            np.testing.assert_equal(len(Y_src_ops), 2)
+            concat_op = (
+                Y_src_ops[0]
+                if Y_src_ops[0]._attrs["op"] == "concatenate"
+                else Y_src_ops[1]
+            )
+            np.testing.assert_equal(
+                concat_op._attrs["input_masks"], [False, False, True, False]
+            )
 
         expected_inputs_group_gemm_op = [X1, W1, X2, W2, X3, W3]
         np.testing.assert_equal(
@@ -250,14 +259,12 @@ class StridedReshapeCatTestCase(unittest.TestCase):
         self._test_strided_reshape_cat_bias()
 
     @unittest.skipIf(detect_target().name() == "rocm", "Not supported by ROCM.")
-    @unittest.skipIf(
-        detect_target().name() == "cuda" and int(detect_target()._arch) < 80,
-        "Not supported by CUDA < SM80.",
-    )
-    def test_strided_reshape_cat_float(self):
+    def test_strided_reshape_cat_fp32_sm80(self):
         self._test_strided_reshape_cat(num_cat_ops=2, dtype="float")
         self._test_strided_reshape_cat_bias(dtype="float")
 
+
+filter_test_cases_by_test_env(StridedReshapeCatTestCase)
 
 if __name__ == "__main__":
     torch.manual_seed(0)

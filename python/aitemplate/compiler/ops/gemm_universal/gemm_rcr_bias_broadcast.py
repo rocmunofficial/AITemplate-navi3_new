@@ -17,9 +17,9 @@ gemm_rcr_bias with 2 extra sources.
 BinaryOp2(BinaryOp1(UnaryOp(TensorOp(X) + bias), residual1), residual2)
 """
 
-from ...base import Tensor
-from ...tensor_accessor import TensorAccessor
-from . import gemm_rcr_bias
+from aitemplate.compiler.base import Tensor
+from aitemplate.compiler.ops.gemm_universal import gemm_rcr_bias
+from aitemplate.compiler.tensor_accessor import TensorAccessor
 
 # pylint: disable=C0103, W0223, W0221
 
@@ -49,7 +49,7 @@ class gemm_rcr_bias_broadcast(gemm_rcr_bias):
             for d in inputs[3:]:
                 d_shape = d.shape()
                 if d_shape != base_shape:
-                    msg = "Additional elementwise shape {d_shape} doesn't match gemm_bias' shape {base_shape}"
+                    msg = f"Additional elementwise shape {d_shape} doesn't match gemm_bias' shape {base_shape}"
                     return False, msg
 
         return True, msg

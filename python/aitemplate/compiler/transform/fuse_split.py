@@ -18,11 +18,12 @@ Perform transformations on ops which support strided inputs / outputs.
 import logging
 from typing import List
 
-from aitemplate.compiler.stable_set import StableSet
+from aitemplate.compiler.base import IntImm, IntVar, Operator, Tensor
 
-from ...utils import alignment, graph_utils
-from ..base import IntImm, IntVar, Operator, Tensor
-from . import transform_strided_ops_utils, transform_utils
+from aitemplate.compiler.stable_set import StableSet
+from aitemplate.compiler.transform import transform_strided_ops_utils, transform_utils
+
+from aitemplate.utils import alignment, graph_utils
 
 # pylint: disable=W0612
 
@@ -137,7 +138,7 @@ def _fuse_split_and_group_gemm(  # noqa: C901
 
 
 def _is_supported_op(op_type: str):
-    from ...backend.target import Target
+    from aitemplate.backend.target import Target
 
     if Target.current().name() == "rocm":
         return op_type == "bmm_softmax_bmm_permute"

@@ -21,12 +21,22 @@ from aitemplate.compiler.ops.common.epilogue import FuncEnum
 from aitemplate.frontend import Tensor
 from aitemplate.testing import detect_target
 from aitemplate.testing.test_utils import (
+    filter_test_cases_by_params,
+    filter_test_cases_by_test_env,
     get_random_torch_tensor,
     get_torch_empty_tensor,
+    TestEnv,
 )
 from aitemplate.utils import shape_utils
 
 from parameterized import parameterized
+
+
+def custom_name_func(testcase_func, param_num, param):
+    return "%s_%s_sm80" % (
+        testcase_func.__name__[:-5],
+        param.args[-2],
+    )
 
 
 class FuseGemmRcrBiasCase(unittest.TestCase):
@@ -261,7 +271,14 @@ class FuseGemmRcrBiasCase(unittest.TestCase):
             module.run_with_tensors(inputs, [y])
             self.assertTrue(torch.allclose(Y_pt, y, atol=1e-1, rtol=1e-1))
 
-    @parameterized.expand([("float16"), ("float")])
+    @parameterized.expand(
+        filter_test_cases_by_params(
+            {
+                TestEnv.CUDA_LESS_THAN_SM80: [("float16")],
+                TestEnv.CUDA_SM80: [("float")],
+            }
+        )
+    )
     def test_gemm_rcr_bias_add_fail(self, dtype):
         target = detect_target()
         if dtype == "float" and (int(target._arch) < 80 or target.name == "rocm"):
@@ -306,7 +323,14 @@ class FuseGemmRcrBiasCase(unittest.TestCase):
         module.run_with_tensors([X_pt, W_pt, B_pt, B1_pt], [y])
         self.assertTrue(torch.allclose(Y_pt, y, atol=1e-1, rtol=1e-1))
 
-    @parameterized.expand([("float16"), ("float")])
+    @parameterized.expand(
+        filter_test_cases_by_params(
+            {
+                TestEnv.CUDA_LESS_THAN_SM80: [("float16")],
+                TestEnv.CUDA_SM80: [("float")],
+            }
+        )
+    )
     def test_gemm_rcr_bias_chained(self, dtype):
         target = detect_target()
         if dtype == "float" and (int(target._arch) < 80 or target.name == "rocm"):
@@ -366,7 +390,14 @@ class FuseGemmRcrBiasCase(unittest.TestCase):
         module.run_with_tensors([X_pt, W_pt, B_pt, D_pt], [y])
         self.assertTrue(torch.allclose(Y_pt, y, atol=1e-1, rtol=1e-1))
 
-    @parameterized.expand([("float16"), ("float")])
+    @parameterized.expand(
+        filter_test_cases_by_params(
+            {
+                TestEnv.CUDA_LESS_THAN_SM80: [("float16")],
+                TestEnv.CUDA_SM80: [("float")],
+            }
+        )
+    )
     def test_gemm_rcr_bias_fail(self, dtype):
         target = detect_target()
         if dtype == "float" and (int(target._arch) < 80 or target.name == "rocm"):
@@ -737,48 +768,99 @@ class FuseGemmRcrBiasCase(unittest.TestCase):
         )
 
     @unittest.skipIf(detect_target().name() == "rocm", "Not supported by ROCM.")
-    @unittest.skipIf(
-        detect_target().name() == "cuda" and int(detect_target()._arch) < 80,
-        "Not supported by CUDA < SM80.",
+    @parameterized.expand(
+        [
+            (
+                _test_gemm_rcr_bias,
+                [8],
+                16,
+                8,
+                True,
+                "gemm_rcr_bias_basic_decomposed_float",
+                "float",
+            ),
+            (
+                _test_gemm_rcr_bias_add_add,
+                [8],
+                16,
+                8,
+                False,
+                "gemm_rcr_bias_add_basic_float",
+                "float",
+            ),
+            (
+                _test_gemm_rcr_bias_add_add,
+                [8, 32],
+                16,
+                8,
+                False,
+                "gemm_rcr_bias_add_add_dynamic_float",
+                "float",
+            ),
+            (
+                _test_gemm_rcr_bias_add_add_relu,
+                [8],
+                16,
+                3,
+                False,
+                "gemm_rcr_bias_add_add_relu_need_align_float",
+                "float",
+            ),
+            (
+                _test_gemm_rcr_bias_add_relu,
+                [8],
+                16,
+                8,
+                True,
+                "gemm_rcr_bias_add_relu_basic_decomposed_float",
+                "float",
+            ),
+            (
+                _test_gemm_rcr_bias_tanh,
+                [8],
+                16,
+                8,
+                False,
+                "gemm_rcr_bias_tanh_basic_float",
+                "float",
+            ),
+            (
+                _test_gemm_rcr_bias_mul,
+                [8, 32],
+                16,
+                8,
+                False,
+                "gemm_rcr_bias_mul_dynamic_float",
+                "float",
+            ),
+            (
+                _test_gemm_rcr_bias_mul_add,
+                [8],
+                16,
+                3,
+                False,
+                "gemm_rcr_bias_mul_add_need_align_float",
+                "float",
+            ),
+            (
+                _test_gemm_rcr_bias_mul_tanh,
+                [8],
+                16,
+                3,
+                False,
+                "gemm_rcr_bias_mul_tanh_need_align_float",
+                "float",
+            ),
+        ],
+        name_func=custom_name_func,
     )
-    def test_gemm_rcr_bias_add_float(self):
-        self._test_gemm_rcr_bias(
-            [8], 16, 8, True, "gemm_rcr_bias_basic_decomposed_float", dtype="float"
-        )
-        self._test_gemm_rcr_bias_add(
-            [8], 16, 8, False, "gemm_rcr_bias_add_basic_float", dtype="float"
-        )
-        self._test_gemm_rcr_bias_add_add(
-            [8, 32], 16, 8, False, "gemm_rcr_bias_add_add_dynamic_float", dtype="float"
-        )
-        self._test_gemm_rcr_bias_add_add_relu(
-            [8],
-            16,
-            3,
-            False,
-            "gemm_rcr_bias_add_add_relu_need_align_float",
-            dtype="float",
-        )
-        self._test_gemm_rcr_bias_add_relu(
-            [8],
-            16,
-            8,
-            True,
-            "gemm_rcr_bias_add_relu_basic_decomposed_float",
-            dtype="float",
-        )
-        self._test_gemm_rcr_bias_tanh(
-            [8], 16, 8, False, "gemm_rcr_bias_tanh_basic_float", dtype="float"
-        )
-        self._test_gemm_rcr_bias_mul(
-            [8, 32], 16, 8, False, "gemm_rcr_bias_mul_dynamic_float", dtype="float"
-        )
-        self._test_gemm_rcr_bias_mul_add(
-            [8], 16, 3, False, "gemm_rcr_bias_mul_add_need_align_float", dtype="float"
-        )
-        self._test_gemm_rcr_bias_mul_tanh(
-            [8], 16, 3, False, "gemm_rcr_bias_mul_tanh_need_align_float", dtype="float"
-        )
+    def test_gemm_rcr_bias_add_float_sm80(
+        self, func, Ms, N, K, decomposed, testname, dtype
+    ):
+        func(self, Ms, N, K, decomposed, testname, dtype)
+
+
+filter_test_cases_by_test_env(FuseGemmRcrBiasCase)
 
 
 class FuseGemmRcrBiasActivationCase(unittest.TestCase):
@@ -1121,67 +1203,92 @@ class FuseGemmRcrBiasActivationCase(unittest.TestCase):
         )
 
     @unittest.skipIf(detect_target().name() == "rocm", "Not supported by ROCM.")
-    @unittest.skipIf(
-        detect_target().name() == "cuda" and int(detect_target()._arch) < 80,
-        "Not supported by CUDA < SM80.",
+    @parameterized.expand(
+        [
+            (
+                _test_gemm_rcr_bias_activation,
+                [8],
+                16,
+                8,
+                True,
+                "gemm_rcr_bias_relu_basic_decomposed_float",
+                "float",
+                "relu",
+                "gemm_rcr_bias_relu",
+            ),
+            (
+                _test_gemm_rcr_bias_activation,
+                [8],
+                16,
+                8,
+                False,
+                "gemm_rcr_bias_sigmoid_basic_float",
+                "float",
+                "sigmoid",
+                "gemm_rcr_bias_sigmoid",
+            ),
+            (
+                _test_gemm_rcr_bias_sigmoid_mul,
+                [8],
+                16,
+                8,
+                False,
+                "gemm_rcr_bias_sigmoid_mul_basic_float",
+                "float",
+            ),
+            (
+                _test_gemm_rcr_bias_sigmoid_mul_tanh,
+                [8],
+                16,
+                3,
+                False,
+                "gemm_rcr_bias_sigmoid_mul_tanh_need_align_float",
+                "float",
+            ),
+            (
+                _test_gemm_rcr_bias_activation,
+                [8],
+                16,
+                8,
+                False,
+                "gemm_rcr_bias_tanh_basic_float",
+                "float",
+                "tanh",
+                "gemm_rcr_bias_tanh",
+            ),
+            (
+                _test_gemm_rcr_bias_activation,
+                [8, 32],
+                16,
+                8,
+                True,
+                "gemm_rcr_bias_fast_gelu_basic_decomposed_float",
+                "float",
+                "fast_gelu",
+                "gemm_rcr_bias_fast_gelu",
+            ),
+        ],
+        name_func=custom_name_func,
     )
-    def test_gemm_rcr_bias_float(self):
-        self._test_gemm_rcr_bias_activation(
-            [8],
-            16,
-            8,
-            "relu",
-            "gemm_rcr_bias_relu",
-            True,
-            "gemm_rcr_bias_relu_basic_decomposed_float",
-            dtype="float",
-        )
-        self._test_gemm_rcr_bias_activation(
-            [8],
-            16,
-            8,
-            "sigmoid",
-            "gemm_rcr_bias_sigmoid",
-            False,
-            "gemm_rcr_bias_sigmoid_basic_float",
-            dtype="float",
-        )
-        self._test_gemm_rcr_bias_sigmoid_mul(
-            [8],
-            16,
-            8,
-            False,
-            "gemm_rcr_bias_sigmoid_mul_basic_float",
-            dtype="float",
-        )
-        self._test_gemm_rcr_bias_sigmoid_mul_tanh(
-            [8],
-            16,
-            3,
-            False,
-            "gemm_rcr_bias_sigmoid_mul_tanh_need_align_float",
-            dtype="float",
-        )
-        self._test_gemm_rcr_bias_activation(
-            [8],
-            16,
-            8,
-            "tanh",
-            "gemm_rcr_bias_tanh",
-            False,
-            "gemm_rcr_bias_tanh_basic_float",
-            dtype="float",
-        )
-        self._test_gemm_rcr_bias_activation(
-            [8, 32],
-            16,
-            8,
-            "fast_gelu",
-            "gemm_rcr_bias_fast_gelu",
-            True,
-            "gemm_rcr_bias_fast_gelu_basic_decomposed_float",
-            dtype="float",
-        )
+    def test_gemm_rcr_bias_float_sm80(
+        self,
+        func,
+        Ms,
+        N,
+        K,
+        decomposed,
+        testname,
+        dtype,
+        activation=None,
+        target_ait=None,
+    ):
+        if activation and target_ait:
+            func(self, Ms, N, K, activation, target_ait, decomposed, testname, dtype)
+        else:
+            func(self, Ms, N, K, decomposed, testname, dtype)
+
+
+filter_test_cases_by_test_env(FuseGemmRcrBiasActivationCase)
 
 
 class FuseGemmRcrBiasSwishCase(unittest.TestCase):
@@ -1269,11 +1376,7 @@ class FuseGemmRcrBiasSwishCase(unittest.TestCase):
         )
 
     @unittest.skipIf(detect_target().name() == "rocm", "Not supported by ROCM.")
-    @unittest.skipIf(
-        detect_target().name() == "cuda" and int(detect_target()._arch) < 80,
-        "Not supported by CUDA < SM80.",
-    )
-    def test_gemm_rcr_swish_float(self):
+    def test_gemm_rcr_swish_float_sm80(self):
         self._test_gemm_rcr_bias_swish(
             [8],
             16,
@@ -1297,6 +1400,9 @@ class FuseGemmRcrBiasSwishCase(unittest.TestCase):
             dtype="float",
             use_add=True,
         )
+
+
+filter_test_cases_by_test_env(FuseGemmRcrBiasSwishCase)
 
 
 class FuseBmmCcrAddCase(unittest.TestCase):
@@ -1437,11 +1543,7 @@ class FuseBmmCcrAddCase(unittest.TestCase):
         self._test_bmm_ccr_add_negative("bmm_ccr_add_negative_input", "other_input")
 
     @unittest.skipIf(detect_target().name() == "rocm", "Not supported by ROCM.")
-    @unittest.skipIf(
-        detect_target().name() == "cuda" and int(detect_target()._arch) < 80,
-        "Not supported by CUDA < SM80.",
-    )
-    def test_bmm_ccr_add_float(self):
+    def test_bmm_ccr_add_float_sm80(self):
         self._test_bmm_ccr_add(
             [8, 32], 32, 16, 8, "bmm_ccr_add_dynamic_float", dtype="float"
         )
@@ -1461,7 +1563,14 @@ class FuseBmmCcrAddCase(unittest.TestCase):
             "bmm_ccr_add_negative_output", "is_output", dtype="float"
         )
 
-    @parameterized.expand([("float16"), ("float")])
+    @parameterized.expand(
+        filter_test_cases_by_params(
+            {
+                TestEnv.CUDA_LESS_THAN_SM80: [("float16")],
+                TestEnv.CUDA_SM80: [("float")],
+            }
+        )
+    )
     def test_bmm_ccr_add_double_shared_input(self, dtype):
         target = detect_target()
         if dtype == "float" and (int(target._arch) < 80 or target.name == "rocm"):
@@ -1537,6 +1646,9 @@ class FuseBmmCcrAddCase(unittest.TestCase):
         self.assertTrue(torch.allclose(Y1_pt, y1, atol=1e-1, rtol=1e-1))
 
 
+filter_test_cases_by_test_env(FuseBmmCcrAddCase)
+
+
 class FuseBmmCrrAddCase(unittest.TestCase):
     def _test_bmm_crr_add(
         self, Bs, M, N, K, testname, dtype="float16", do_not_fuse=False
@@ -1605,11 +1717,7 @@ class FuseBmmCrrAddCase(unittest.TestCase):
         )
 
     @unittest.skipIf(detect_target().name() == "rocm", "Not supported by ROCM.")
-    @unittest.skipIf(
-        detect_target().name() == "cuda" and int(detect_target()._arch) < 80,
-        "Not supported by CUDA < SM80.",
-    )
-    def test_bmm_crr_add_float(self):
+    def test_bmm_crr_add_float_sm80(self):
         self._test_bmm_crr_add(
             [8, 32], 32, 16, 8, "bmm_crr_add_dynamic_float", dtype="float"
         )
@@ -1619,6 +1727,9 @@ class FuseBmmCrrAddCase(unittest.TestCase):
         self._test_bmm_crr_add(
             [8], 32, 16, 8, "bmm_crr_add_do_not_fuse", dtype="float", do_not_fuse=True
         )
+
+
+filter_test_cases_by_test_env(FuseBmmCrrAddCase)
 
 
 class FuseBmmRrrAddCase(unittest.TestCase):
@@ -1741,11 +1852,7 @@ class FuseBmmRrrAddCase(unittest.TestCase):
         self._test_bmm_rrr_bias_add([8], 32, 16, 8, [1, 16], "bmm_rrr_bias_add_03")
 
     @unittest.skipIf(detect_target().name() == "rocm", "Not supported by ROCM.")
-    @unittest.skipIf(
-        detect_target().name() == "cuda" and int(detect_target()._arch) < 80,
-        "Not supported by CUDA < SM80.",
-    )
-    def test_bmm_rrr_add_float(self):
+    def test_bmm_rrr_add_float_sm80(self):
         self._test_bmm_rrr_add(
             [8, 32], 32, 16, 8, "bmm_rrr_add_dynamic_float", dtype="float"
         )
@@ -1759,6 +1866,8 @@ class FuseBmmRrrAddCase(unittest.TestCase):
             [8], 32, 16, 8, [1, 32, 16], "bmm_rrr_bias_add_float_03", dtype="float"
         )
 
+
+filter_test_cases_by_test_env(FuseBmmRrrAddCase)
 
 if __name__ == "__main__":
     torch.manual_seed(0)

@@ -87,6 +87,7 @@ class AITTestCase(TestCase):
         passes: List[Callable] = [],  # noqa: B006
         leaf_module: Callable = None,  # one leaf module
         apply_passes_to_lowered_module_only=False,
+        use_fp16_acc=True,
     ):
         # TODO: add precision to interpreter once AIT supports multiple precision level
         # TODO: @qxy11 remove permute options once AIT supports channels-first format
@@ -97,6 +98,7 @@ class AITTestCase(TestCase):
             leaf_module_list.append(leaf_module)
 
         orig_mod = copy.deepcopy(mod)
+        orig_mod.eval()
         mod = acc_tracer.trace(
             mod,
             inputs,
@@ -110,11 +112,15 @@ class AITTestCase(TestCase):
         original_inputs = copy.deepcopy(inputs)
         if permute_inputs:
             inputs = [inp.permute(*permute_inputs).contiguous() for inp in inputs]
+
+        mod.half()
+        inputs = [inp.half().contiguous() for inp in inputs]
         interp = AITInterpreter(
             mod,
             inputs,
             "/tmp",
             f"test-fx2ait-{uuid.uuid1()}",
+            use_fp16_acc=use_fp16_acc,
         )
         with torch.no_grad():
             cuda_inputs = []

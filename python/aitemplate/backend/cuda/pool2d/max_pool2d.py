@@ -18,10 +18,10 @@ Codegen functions for max_pool2d.
 
 import jinja2
 
-from aitemplate.backend.backend_spec import CUDASpec
+from aitemplate.backend import registry
 
-from ... import registry
-from . import pool2d
+from aitemplate.backend.backend_spec import CUDASpec
+from aitemplate.backend.cuda.pool2d import pool2d
 
 # pylint: disable=C0103,C0415,W0613,C0301,W0612
 
@@ -198,7 +198,7 @@ void {{function_name}} (
 @registry.reg("cuda.max_pool2d.gen_function")
 def gen_function(
     func_attrs,
-    exec_cond_remplate,
+    exec_cond_template,
     shape_eval_template,
     shape_save_template,
 ):
@@ -235,7 +235,7 @@ def gen_function(
             stride=func_attrs["stride"],
             dtype=dtype,
         )
-        exec_inst = exec_cond_remplate.render(indent="  ", cond=key, program=program)
+        exec_inst = exec_cond_template.render(indent="  ", cond=key, program=program)
         exec_paths += exec_inst
     return SRC_TEMPLATE.render(
         function_name=func_name,

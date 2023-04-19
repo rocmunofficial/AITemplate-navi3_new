@@ -23,15 +23,15 @@ import os
 
 import re
 import subprocess
-import typing
 from collections import namedtuple
 from queue import Queue
-from typing import Callable, List, Tuple
+from time import sleep
+from typing import Callable, List, Tuple, Union
+
+from aitemplate.backend.target import Target
+from aitemplate.backend.task_runner import BaseRunner, Task
 
 from aitemplate.testing import detect_target
-
-from .target import Target
-from .task_runner import BaseRunner, Task
 
 # pylint: disable=W0221
 
@@ -45,6 +45,9 @@ PROF_RUNTIME_PATTERN = re.compile(r"OP:([a-zA-Z0-9_]+),TIME:([\d\.]+),WS:([\d]+)
 RUNTIME_PATTERN = re.compile(r"TIME:([\d\.]+)")
 WORKSPACE_PATTERN = re.compile(r"WS:([\d]+)")
 
+PROFILER_RUN_MAX_ATTEMPTS = 3
+PROFILER_RUN_RETRY_DELAY_SECONDS = 5
+
 ProfileResult = namedtuple("ProfileResult", "op_config duration workspace")
 """Object to store profiling result
 """
@@ -57,7 +60,7 @@ def optimization_key(result):
 def extract_profile_result(
     stdout,
     return_ops=None,
-) -> Tuple[ProfileResult | List[ProfileResult], bool]:
+) -> Tuple[Union[ProfileResult, List[ProfileResult]], bool]:
     failed = False
     try:
         runtimes = PROF_RUNTIME_PATTERN.findall(stdout)
@@ -125,14 +128,12 @@ def process_task(task: Task) -> None:
         if not single_file_profiler:
             task._failed = True
             return
-        cmd = task._cmd
-        if Target.current().name() == "rocm":
-            cmd = " ".join(cmd)
+
         _LOGGER.debug(
             "Failed: [{name}][{algo}]\ncmd:\n{cmd}\nstderr:\n{stderr}".format(
                 name=task._name,
                 algo=task._idx,
-                cmd=cmd,
+                cmd=task._cmd,
                 stderr=stderr,
             ),
         )
@@ -151,7 +152,7 @@ def process_task(task: Task) -> None:
             )
 
 
-def process_return(task: Task) -> typing.Tuple[typing.Union[int, str], ProfileResult]:
+def process_return(task: Task) -> Tuple[Union[int, str], ProfileResult]:
     """Generate profile result from a profiling task
 
     Parameters
@@ -172,14 +173,14 @@ class Runner(BaseRunner):
     Runner is inherited from BaseRunner.
     """
 
-    def __init__(self, devs: list[int], op_name: str, timeout: int = 30):
+    def __init__(self, devs: List[int], op_name: str, timeout: int = 30):
         _LOGGER.info("Using {n} GPU for profiling {op}".format(n=len(devs), op=op_name))
         super().__init__(devs, op_name, timeout)
         self._dev_flag = Target.current().dev_select_flag()
         self._ftask_proc = process_task
         self._fret_proc = process_return
 
-    def push(self, idx: typing.Union[int, str], cmd: str, return_ops: List[str] = None):
+    def push(self, idx: Union[int, str], cmd: str, return_ops: List[str] = None):
         """Push a new profiling task into runner's queue
 
         Parameters
@@ -188,7 +189,7 @@ class Runner(BaseRunner):
             Profiling task id (usually is algorithm id or name)
         cmd : str
             Bash command to execute the profiling task
-        return_ops : list[str]
+        return_ops : List[str]
             Names of the ops to return the profiling results for. If specified,
             instead of a single (best) ProfileResult instance, a list with the
             ProfileResults for each op in the return_ops is returned from `pull`.
@@ -208,7 +209,7 @@ class Runner(BaseRunner):
 
         Returns
         -------
-        list[Tuple[Union[int, str], ProfileResult]]
+        List[Tuple[Union[int, str], ProfileResult]]
             Profiling results of all successful tasks.
         """
         ret = super().pull(self._ftask_proc, self._fret_proc)
@@ -220,14 +221,29 @@ def run_task(cmds, queue, dev_select_flag):
     device = queue.get()
     _LOGGER.debug(f"running profiler {cmds=} on GPU #{device}")
 
-    completed_process = subprocess.run(
-        cmds,
-        env=update_inplace(os.environ.copy(), {dev_select_flag: device}),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        shell=False,
-    )
+    attempts = 0
+    while True:
+        try:
+            completed_process = subprocess.run(
+                cmds,
+                env=update_inplace(os.environ.copy(), {dev_select_flag: device}),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                shell=False,
+            )
+            break
+        except Exception as ex:
+            attempts += 1
+            if attempts >= PROFILER_RUN_MAX_ATTEMPTS:
+                raise
+            _LOGGER.debug(
+                f"[{attempts} / {PROFILER_RUN_MAX_ATTEMPTS}] "
+                f"Failed to run profiler {cmds=} due to exception: {ex}. "
+                f"Will retry in {PROFILER_RUN_RETRY_DELAY_SECONDS} seconds."
+            )
+            sleep(PROFILER_RUN_RETRY_DELAY_SECONDS)
+
     queue.put(device)
     return completed_process.stdout, completed_process.stderr
 
@@ -264,6 +280,7 @@ class ProfilerRunner:
         self._timeout = timeout
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=len(devices))
         self._futures = []
+        self._cmds = []
         self._postprocessing_delegate = postprocessing_delegate
         try:
             target = Target.current()
@@ -307,17 +324,16 @@ class ProfilerRunner:
                     _LOGGER.debug(
                         f"Profiler failure!\nProfiler stdout: {stdout}\nProfiler stderr: {stderr}",
                     )
-                    _LOGGER.debug(f"Failed to extract profiler result for {cmds}")
-                else:
-                    process_result_callback(
-                        profile_result, self._postprocessing_delegate
-                    )
+                    raise RuntimeError(f"Failed to extract profiler result for {cmds}")
+                process_result_callback(profile_result, self._postprocessing_delegate)
             finally:
                 # unblock one future in `join()`
-                self._done_queue.put(stdout)
+                if stdout is not None:
+                    self._done_queue.put(stdout)
 
         future.add_done_callback(callback_when_done)
         self._futures.append(future)
+        self._cmds.append(cmds)
 
     def join(self):
         """
@@ -325,7 +341,19 @@ class ProfilerRunner:
         """
         done, not_done = concurrent.futures.wait(self._futures, self._timeout)
         for f in not_done:
+            # attempts cancelling, will fail if call is being executed or has finished
             f.cancel()
-        for _ in self._futures:
+        cancelled_cmds = [
+            cmd for cmd, f in zip(self._cmds, self._futures) if f.cancelled()
+        ]
+        if cancelled_cmds:
+            raise RuntimeError(
+                f"Profiler timed out after {self._timeout} sec. "
+                "Try increasing the timeout. "
+                f"Cancelled profilers: {cancelled_cmds}"
+            )
+        for _ in [f for f in self._futures if f.done() or f.running()]:
+            # sync point between futures and queue.
+            # wait for callbacks to finish
             self._done_queue.get(timeout=self._timeout)
         self._postprocessing_delegate.postprocess_results()

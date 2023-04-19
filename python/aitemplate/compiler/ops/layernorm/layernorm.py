@@ -24,15 +24,22 @@ from typing import Any, List, Union
 
 import jinja2
 
+from aitemplate import backend
+from aitemplate.backend import registry
+from aitemplate.backend.target import Target
+from aitemplate.compiler.base import (
+    DynamicProfileStrategy,
+    ExecItem,
+    IntImm,
+    IntVar,
+    Operator,
+    Tensor,
+)
+from aitemplate.compiler.ops.softmax.cache_entry import NormQueryEntry, NormRecordEntry
+from aitemplate.compiler.tensor_accessor import TensorAccessor
+
 from aitemplate.testing import detect_target
 from aitemplate.utils import shape_utils
-
-from .... import backend
-from ....backend import registry
-from ....backend.target import Target
-from ...base import DynamicProfileStrategy, ExecItem, IntImm, IntVar, Operator, Tensor
-from ...tensor_accessor import TensorAccessor
-from ..softmax.cache_entry import NormQueryEntry, NormRecordEntry
 
 # pylint: disable=C0103,W0221,W0102,W0223
 
@@ -126,7 +133,7 @@ class layernorm(Operator):
         (x_shape, gamma_shape, beta_shape) = layernorm.get_input_shapes(x, gamma, beta)
 
         expected_dtype = x.dtype()
-        for (param, name) in ((gamma, "gamma"), (beta, "beta")):
+        for param, name in ((gamma, "gamma"), (beta, "beta")):
             if param is not None and param.dtype() != expected_dtype:
                 raise NotImplementedError(
                     f"Layernorm doesn't support type promotions; expected {expected_dtype} but got {name} with dtype {param.dtype()}"

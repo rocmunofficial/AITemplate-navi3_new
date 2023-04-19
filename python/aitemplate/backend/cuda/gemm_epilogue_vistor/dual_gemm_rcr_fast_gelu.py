@@ -19,11 +19,11 @@ where A[RowMajor][M, K], B[ColMajor][N, K], B1[ColMajor][N, K]
 """
 import jinja2
 
-from ... import registry
-from ...backend_spec import CUDASpec
-from ..gemm_universal import common, common_bias
-from ..gemm_universal.layout import RCR
-from . import common_dual_gemm
+from aitemplate.backend import registry
+from aitemplate.backend.backend_spec import CUDASpec
+from aitemplate.backend.cuda.gemm_epilogue_vistor import common_dual_gemm
+from aitemplate.backend.cuda.gemm_universal import common, common_bias
+from aitemplate.backend.cuda.gemm_universal.layout import RCR
 
 # pylint: disable=C0103,C0415,W0613,C0301,R1705,R1703
 
@@ -32,7 +32,11 @@ from . import common_dual_gemm
 PROBLEM_ARGS_TEMPLATE = jinja2.Template(
     """
     cutlass::gemm::DualGemmMode::kGemm,            // DualGemmMode mode
-    cutlass::gemm::GemmCoord{M, N, K},             // GemmCoord problem_size_
+    cutlass::gemm::GemmCoord{
+        static_cast<coord_t>(M),
+        static_cast<coord_t>(N),
+        static_cast<coord_t>(K)
+    },                                             // GemmCoord problem_size_
     {({{elem_input_type}}*)a_ptr, LayoutA(K)},     // TensorRef<ElementA const, LayoutA> ref_A0_
     {({{elem_input_type}}*)b_ptr, LayoutB(K)},     // TensorRef<ElementB const, LayoutB0> ref_B0_
     ref_B0,                                        // TensorRef<ElementC const, LayoutC> ref_C0_

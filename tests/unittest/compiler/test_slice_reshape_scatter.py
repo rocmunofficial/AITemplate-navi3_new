@@ -22,6 +22,7 @@ from aitemplate.compiler import compile_model, ops
 from aitemplate.frontend import Tensor
 from aitemplate.testing import detect_target
 from aitemplate.testing.test_utils import (
+    filter_test_cases_by_test_env,
     get_random_torch_tensor,
     get_torch_empty_tensor,
 )
@@ -44,6 +45,9 @@ class SliceScatterReshapeCatTestCase(unittest.TestCase):
         reshape_to,
         input_x_shape,
         dim,
+        # when it's true, it means that the reshape can be moved to the front
+        # of the first concat op so that we can fuse all ops into a single concat
+        reshape_movable=False,
         add_tanh=False,
         dtype="float16",
     ):
@@ -99,17 +103,22 @@ class SliceScatterReshapeCatTestCase(unittest.TestCase):
         module = compile_model(
             Y, target, "./tmp", "slice_scatter_reshape_cat", dll_name=dll_name
         )
-        Y_src_ops = Y._attrs["src_ops"]
-        np.testing.assert_equal(len(Y_src_ops), 2)
-        np.testing.assert_equal(concat_op_2 in Y_src_ops, True)
-        np.testing.assert_equal(concat_op_2._attrs["input_masks"], [True, False, True])
-        Y_src_ops_list = list(Y_src_ops)
-        slice_reshape_scatter_op = (
-            Y_src_ops_list[1] if concat_op_2 == Y_src_ops_list[0] else Y_src_ops_list[0]
-        )
-        np.testing.assert_equal(
-            slice_reshape_scatter_op._attrs["op"], "slice_reshape_scatter"
-        )
+        Y_src_ops = list(Y._attrs["src_ops"])
+        if reshape_movable:
+            np.testing.assert_equal(len(Y_src_ops), 1)
+            np.testing.assert_equal(Y_src_ops[0]._attrs["op"], "concatenate")
+        else:
+            np.testing.assert_equal(len(Y_src_ops), 2)
+            np.testing.assert_equal(concat_op_2 in Y_src_ops, True)
+            np.testing.assert_equal(
+                concat_op_2._attrs["input_masks"], [True, False, True]
+            )
+            slice_reshape_scatter_op = (
+                Y_src_ops[1] if concat_op_2 == Y_src_ops[0] else Y_src_ops[0]
+            )
+            np.testing.assert_equal(
+                slice_reshape_scatter_op._attrs["op"], "slice_reshape_scatter"
+            )
 
         input_name_to_index = module.get_input_name_to_index_map()
         inputs = [0 for i in range(len(Xs_pt) + 1)]
@@ -121,11 +130,7 @@ class SliceScatterReshapeCatTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(Y_pt, y, atol=1e-2, rtol=1e-2))
         self.test_count += 1
 
-    @unittest.skipIf(
-        detect_target().name() == "cuda" and int(detect_target()._arch) < 80,
-        "Not supported by cuda sm<80",
-    )
-    def test_slice_scatter_reshape(self):
+    def test_slice_scatter_reshape_sm80(self):
         self._run_one_test(
             input_shapes=[[1, 2], [1, 2]],
             input_start_indices=[[0, 0], [0, 0]],
@@ -133,6 +138,7 @@ class SliceScatterReshapeCatTestCase(unittest.TestCase):
             reshape_to=[1, 2, 2],
             input_x_shape=[1, 1, 2],
             dim=1,
+            reshape_movable=True,
         )
         self._run_one_test(
             input_shapes=[[10, 20], [15, 44]],
@@ -210,13 +216,9 @@ class SliceScatterReshapeCatTestCase(unittest.TestCase):
         dll_name = "test.so"
         test_name = "slice_scatter_reshape_cat_float16_2"
         module = compile_model(Y, target, "./tmp", test_name, dll_name=dll_name)
-        Y_src_ops = Y._attrs["src_ops"]
-        self.assertEqual(len(Y_src_ops), 3)
-        slice_reshape_scatter_cnt = 0
-        for op in Y_src_ops:
-            if op._attrs["op"] == "slice_reshape_scatter":
-                slice_reshape_scatter_cnt += 1
-        self.assertEqual(slice_reshape_scatter_cnt, 2)
+        Y_src_ops = list(Y._attrs["src_ops"])
+        self.assertEqual(len(Y_src_ops), 1)
+        self.assertEqual(Y_src_ops[0]._attrs["op"], "concatenate")
 
         slice_indices = [slice(i, j) for i, j in zip(start_indices, end_indices)]
 
@@ -240,6 +242,8 @@ class SliceScatterReshapeCatTestCase(unittest.TestCase):
         module.run_with_tensors(inputs, [y])
         self.assertTrue(torch.allclose(y_pt, y, atol=1e-2, rtol=1e-2))
 
+
+filter_test_cases_by_test_env(SliceScatterReshapeCatTestCase)
 
 if __name__ == "__main__":
     torch.manual_seed(0)

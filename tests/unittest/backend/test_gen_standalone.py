@@ -25,10 +25,12 @@ from aitemplate.compiler.ops.common.epilogue import FuncEnum
 from aitemplate.frontend import IntImm, Tensor
 from aitemplate.testing import detect_target
 from aitemplate.testing.test_utils import (
+    filter_test_cases_by_test_env,
     get_random_torch_tensor,
     get_torch_empty_tensor,
 )
 from aitemplate.utils.debug_settings import AITDebugSettings
+from aitemplate.utils.misc import is_windows
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -114,7 +116,7 @@ class StridedOpCatPatternTestCase(unittest.TestCase):
         )
         self.assertTrue(torch.allclose(y, y_pt, atol=1e-2, rtol=1e-2))
 
-        # Now we run the generate executable
+        # Now we run the generated executable
         cwd = os.getcwd()
         workdir = os.path.join(cwd, "tmp", test_name)
         working_env = os.environ.copy()
@@ -125,8 +127,9 @@ class StridedOpCatPatternTestCase(unittest.TestCase):
         else:
             working_env["LD_LIBRARY_PATH"] = workdir
         _LOGGER.info(f"work dir: {workdir}")
+        exe_name = "./test.exe" if is_windows() else "./test"
         with subprocess.Popen(
-            ["./test.exe"],
+            [exe_name],
             shell=True,
             cwd=workdir,
             env=working_env,
@@ -146,7 +149,7 @@ class StridedOpCatPatternTestCase(unittest.TestCase):
                 if proc.returncode != 0:
                     _LOGGER.info(f"stdout:\n\n{stdout}")
                     _LOGGER.info(f"stderr:\n\n{stderr}")
-                    raise RuntimeError("failed to execute test.exe")
+                    raise RuntimeError(f"failed to execute {exe_name}")
                 else:
                     _LOGGER.info(f"stdout:\n\n{stdout}")
                     all_output_lines = stdout.split("\n")
@@ -164,13 +167,11 @@ class StridedOpCatPatternTestCase(unittest.TestCase):
         self._test_gen_standalone("gen_standalone_f16", "float16")
 
     @unittest.skipIf(detect_target().name() == "rocm", "Not supported by ROCM.")
-    @unittest.skipIf(
-        detect_target().name() == "cuda" and int(detect_target()._arch) < 80,
-        "Not supported by CUDA < SM80.",
-    )
-    def test_gen_standalone_f32(self):
+    def test_gen_standalone_f32_sm80(self):
         self._test_gen_standalone("gen_standalone_f32", "float32")
 
+
+filter_test_cases_by_test_env(StridedOpCatPatternTestCase)
 
 if __name__ == "__main__":
     unittest.main()

@@ -29,17 +29,17 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import jinja2
 
+from aitemplate.backend import registry
+
 from aitemplate.backend.main_templates import MODEL_CONTAINER_TEMPLATE, MODEL_TEMPLATE
-from aitemplate.compiler.base import Operator
+from aitemplate.backend.target import Target
+
+from aitemplate.compiler.base import IntImm, IntVar, IntVarTensor, Operator, Tensor
 from aitemplate.compiler.dtype import dtype_to_enumerator, get_dtype_size
 from aitemplate.compiler.tensor_accessor import TensorAccessor
 
 from aitemplate.compiler.transform.memory_planning import Workspace
 from aitemplate.utils.debug_settings import AITDebugSettings
-
-from ..compiler.base import IntImm, IntVar, IntVarTensor, Tensor
-from . import registry
-from .target import Target
 
 # pylint: disable=C0103,W0613,C0301
 
@@ -60,12 +60,12 @@ CONSTANT_FOLDER_MODEL_NAME = "ConstantFolder"
 MODEL_NAME = "Model"
 
 
-def gen_profiler(sorted_graph: list[Tensor], workdir: str, dynamic_profiling_strategy):
+def gen_profiler(sorted_graph: List[Tensor], workdir: str, dynamic_profiling_strategy):
     """Generate operator profiler source code files for the given graph
 
     Parameters
     ----------
-    sorted_graph : list[Tensor]
+    sorted_graph : List[Tensor]
         The network after running toposort transformation
     workdir : str
         Target directory for generated C++ source code files
@@ -83,13 +83,13 @@ def gen_profiler(sorted_graph: list[Tensor], workdir: str, dynamic_profiling_str
 
 
 def gen_function_src(
-    sorted_graph: list[Tensor], workdir: str, model_name: str = ""
-) -> list[Tuple[str, str]]:
+    sorted_graph: List[Tensor], workdir: str, model_name: str = ""
+) -> List[Tuple[str, str]]:
     """Generate functions source code files for the given graph
 
     Parameters
     ----------
-    sorted_graph : list[Tensor]
+    sorted_graph : List[Tensor]
         The network after running toposort transformation
     workdir : str
         Target directory for generated C++ source code files
@@ -98,7 +98,7 @@ def gen_function_src(
 
     Returns
     -------
-    list[Tuple[str, str]]
+    List[Tuple[str, str]]
         List of tuple (source file path, object file path)
     """
     target = Target.current()
@@ -321,7 +321,7 @@ class ModelContainerGenerator:
         graph: List[Tensor],
         output_tensors: List[Tensor],
         model_name: str = MODEL_NAME,
-        additional_unbound_constants: Optional[list[Tensor]] = None,
+        additional_unbound_constants: Optional[List[Tensor]] = None,
         debug_settings: Optional[AITDebugSettings] = None,
     ):
         self.target = Target.current()
@@ -515,7 +515,8 @@ class ModelContainerGenerator:
                 )
             )
             self._codegen_bound_constant(tensor)
-            self.reset_constants.append(const_slice)
+            if not tensor._attrs.get("is_internal_constant", False):
+                self.reset_constants.append(const_slice)
             if self.constants_data_file is not None:
                 self._add_owned_constant(tensor)
         elif tensor._attrs["constant_folding_output_idx"] is not None:
@@ -526,7 +527,8 @@ class ModelContainerGenerator:
                 )
             )
             self.tensor_slice.append(const_slice)
-            self.reset_constants.append(const_slice)
+            if not tensor._attrs.get("is_internal_constant", False):
+                self.reset_constants.append(const_slice)
         elif not isinstance(tensor, IntVarTensor):
             # Unbound constant. We will expect the user to set this via SetConstant.
             self.set_up_constant_names.append(
@@ -680,7 +682,12 @@ class ModelContainerGenerator:
 
         batch_dim_name = jagged_int_var.batch_dim()._attrs["name"]
         if batch_dim_name not in self.visited_dims:
-            self.dim_decl.append(self.f_var_decl(batch_dim_name, 0))
+            batch_dim_value = (
+                0
+                if not isinstance(jagged_int_var.batch_dim(), IntImm)
+                else jagged_int_var.batch_dim().value()
+            )
+            self.dim_decl.append(self.f_var_decl(batch_dim_name, batch_dim_value))
             self.visited_dims.add(batch_dim_name)
 
     def _process_dims_for_tensor(self, node: Tensor) -> None:
@@ -776,6 +783,8 @@ class ModelContainerGenerator:
                 )
             else:
                 self.tensor_decl.append(self.f_var_decl(name=name))
+            # IntVarTensor could be used as dim too, add to visited to prevent duplicated declaration.
+            self.visited_dims.add(name)
         else:
             self.tensor_decl.append(self.f_ptr_decl(name=name, dtype=dtype))
 
@@ -899,10 +908,11 @@ class ModelContainerGenerator:
         The dictionary returned is a map from filename -> contents.
         """
         device_functions_header_name = f"{self.target.name()}_device_functions.h"
+        includes_header_name = f"{self.target.name()}_includes.h"
         result = {}
         result[
             "device_functions-generated.h"
-        ] = f'#include "{device_functions_header_name}"'
+        ] = f'#include "{device_functions_header_name}"\n#include "{includes_header_name}"'
 
         result["model-generated.h"] = self.generate_model()
 
@@ -982,7 +992,7 @@ _DEBUG_SETTINGS = AITDebugSettings()
 
 
 def gen_library_src(  # noqa: C901
-    sorted_graph: list[Tensor],
+    sorted_graph: List[Tensor],
     max_blob_size: int,
     max_constant_blob_size: int,
     workspace: Workspace,
@@ -990,13 +1000,13 @@ def gen_library_src(  # noqa: C901
     output_tensors: List[Tensor],
     model_name: str = "",
     debug_settings: AITDebugSettings = _DEBUG_SETTINGS,
-    additional_unbound_constants: Optional[list[Tensor]] = None,
-) -> list[Tuple[str, str]]:
+    additional_unbound_constants: Optional[List[Tensor]] = None,
+) -> List[Tuple[str, str]]:
     """Generate model driver source code files for the given graph
 
     Parameters
     ----------
-    sorted_graph : list[Tensor]
+    sorted_graph : List[Tensor]
         The network after running toposort transformation
     max_blob_size : int
         Total memory for input/output tensor and intermediate results,
@@ -1012,7 +1022,7 @@ def gen_library_src(  # noqa: C901
 
     Returns
     -------
-    list[Tuple[str, str]]
+    List[Tuple[str, str]]
         List of tuple (source file path, object file path)
     """
 

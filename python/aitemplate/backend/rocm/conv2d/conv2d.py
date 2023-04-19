@@ -15,10 +15,9 @@
 """
 ROCM codegen functions for conv2d.
 """
-from ... import registry
-from . import common
-from ...target import Target
-
+from aitemplate.backend import registry
+from aitemplate.backend.rocm.conv2d import common
+from aitemplate.backend.target import Target
 # pylint: disable=C0103,C0415,W0613
 
 
@@ -74,7 +73,7 @@ def conv2d_gen_profiler(func_attrs, workdir, shape_template):
 @registry.reg("rocm.conv2d.gen_function")
 def conv2d_gen_function(
     func_attrs,
-    exec_cond_remplate,
+    exec_cond_template,
     shape_eval_template,
     shape_save_template,
 ):
@@ -90,7 +89,7 @@ def conv2d_gen_function(
         Execution statements in main function.
     src_template : jinja2.Template
         Full main.cpp with headers, embedding all templates.
-    exec_cond_remplate : jinja2.Template
+    exec_cond_template : jinja2.Template
         Generates if statement to execute kernel.
     shape_eval_template : jinja2.Template
         Generates shape calculation.
@@ -107,7 +106,7 @@ def conv2d_gen_function(
     """
     return common.gen_function(
         func_attrs,
-        exec_cond_remplate,
+        exec_cond_template,
         shape_eval_template,
         shape_save_template,
         "",

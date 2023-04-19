@@ -34,6 +34,7 @@ from aitemplate.compiler.public import (
     elementwise,
     expand,
     flatten,
+    full,
     FuncEnum,
     gemm_rcr,
     gemm_rrr,
@@ -85,7 +86,6 @@ from .utils import (
     identical_elem_tuple_to_int,
     ncdhw2ndhwc,
     nchw2nhwc,
-    unify_dynamic_shape_name,
     weight_ncdhw2ndhwc,
     weight_nchw2nhwc,
 )
@@ -352,10 +352,6 @@ def acc_ops_cat(
     if not isinstance(dim, int):
         raise ValueError(f"Unexpected {type(dim)} dim for {name}: {dim}")
 
-    # TODO:  unify_dynamic_shape_name is a hack to workaround AIT's dynamic shape requirement.
-    # We will remove it after AIT provides vanilla support.
-    for i in range(len(tensors) - 1):
-        unify_dynamic_shape_name(tensors[i], tensors[i + 1])
     return concatenate()(tensors, dim=dim)
 
 
@@ -430,6 +426,33 @@ def acc_ops_softmax(
         raise RuntimeError(f"Unexpected input for {name}: {input_val}")
 
     dim = kwargs["dim"]
+    rank = len(input_val.shape())
+    if dim < 0:
+        dim = rank + dim
+    if dim != rank - 1:
+        for i in range(dim + 1, rank):
+            unsupported = False
+            if isinstance(input_val.shape()[i], IntImm):
+                if input_val.shape()[i].value() != 1:
+                    unsupported = True
+            elif isinstance(input_val.shape()[i], IntVar):
+                unsupported = True
+            else:
+                raise RuntimeError(
+                    f"unknown dimension type={type(i)} in AITTensor={input_val}"
+                )
+
+            if unsupported:
+                raise ValueError(
+                    f"AIT softmax only supports dim=rank-1, got AITTensor={input_val}, "
+                    f"where dim={dim}, rank={rank}"
+                )
+        reshape_dim = size()(input_val)[: dim + 1]
+        reshape_val = reshape()(input_val, reshape_dim)
+        softmax_val = softmax()(reshape_val, -1)
+        return reshape()(
+            softmax_val, reshape_dim + [IntVarTensor(IntImm(1))] * (rank - dim - 1)
+        )
 
     return softmax()(input_val, dim)
 
@@ -516,6 +539,7 @@ def acc_ops_unbind(
     return res
 
 
+@ait_converter(operator.getitem)
 @ait_converter(acc_ops.getitem)
 def acc_ops_getitem(
     target: Target,
@@ -523,6 +547,13 @@ def acc_ops_getitem(
     kwargs: Dict[str, Argument],
     name: str,
 ) -> ConverterOutput:
+    # operator.getitem does not have kwargs. We copy args to kwargs so the downstream like acc_ops_slice can use it.
+    new_kwargs = dict(kwargs)
+    if "input" not in kwargs:
+        new_kwargs["input"] = args[0]
+    if "idx" not in kwargs:
+        new_kwargs["idx"] = args[1]
+    kwargs = new_kwargs
     input_val = kwargs["input"]
     idx = kwargs["idx"]
     if isinstance(idx, Sequence) and any(isinstance(x, Sequence) for x in idx):
@@ -894,6 +925,7 @@ def acc_ops_group_norm(
     name: str,
 ) -> ConverterOutput:
     input_val = kwargs["input"]
+    input_val = ait_nchw2nhwc(kwargs["input"])
     num_groups = kwargs["num_groups"]
     weight_val = kwargs["weight"]
     bias_val = kwargs["bias"]
@@ -902,7 +934,8 @@ def acc_ops_group_norm(
         raise RuntimeError(f"Non-tensor inputs for {name}: {input_val}")
     num_channels = input_val.shape()[-1].value()
     op = group_norm(num_groups, num_channels)
-    return op(input_val, weight_val, bias_val, eps_val)
+    result = op(input_val, weight_val, bias_val, eps_val)
+    return ait_nhwc2nchw(result)
 
 
 @ait_converter(acc_ops.layer_norm)
@@ -921,6 +954,7 @@ def acc_ops_layer_norm(
         raise ValueError(f"Unexpected normalized shape value in {name}: {shape}")
     weight = kwargs["weight"]
     bias = kwargs["bias"]
+    eps = kwargs["eps"]
     normalized_shape = []
     if all(isinstance(i, int) for i in shape):
         for i in shape:
@@ -929,7 +963,7 @@ def acc_ops_layer_norm(
         normalized_shape = shape
     else:
         raise ValueError(f"Unexpected normalized shape value in {name}: {shape}")
-    return layernorm()(input_val, weight, bias, normalized_shape)
+    return layernorm()(input_val, weight, bias, normalized_shape, eps)
 
 
 @ait_converter(acc_ops.flatten)
@@ -947,25 +981,6 @@ def acc_ops_flatten(
     end_dim = kwargs["end_dim"] if "end_dim" in kwargs else -1
 
     return flatten(start_dim=start_dim, end_dim=end_dim)(input_val)
-
-
-def acc_ops_bmm(name: str, lhs: AITTensor, rhs: AITTensor) -> ConverterOutput:
-    lhs_shape = lhs.shape()
-    rhs_shape = rhs.shape()
-    if (
-        lhs_shape[0] == rhs_shape[0]
-        and lhs_shape[0]._attrs["name"] is None
-        and rhs_shape[0]._attrs["name"] is None
-    ):
-        lhs_shape[0]._attrs["name"] = f"acc_{name}_batch_size"
-        rhs_shape[0]._attrs["name"] = f"acc_{name}_batch_size"
-    elif lhs_shape[0] != rhs_shape[0]:
-        if lhs_shape[0]._attrs["values"] == rhs_shape[0]._attrs["values"]:
-            if lhs_shape[0]._attrs["name"] is None:
-                lhs_shape[0] = rhs_shape[0]
-            else:
-                rhs_shape[0] = lhs_shape[0]
-    return bmm_rrr()(lhs, rhs)
 
 
 @ait_converter(acc_ops.matmul)
@@ -994,7 +1009,7 @@ def acc_ops_matmul(
     if len(rhs_shape) == 2:
         return gemm_rrr()(lhs, rhs)
     elif len(lhs_shape) <= 3 and len(rhs_shape) <= 3:
-        return acc_ops_bmm(name, lhs, rhs)
+        return bmm_rrr()(lhs, rhs)
     elif len(lhs_shape) == 4 and len(rhs_shape) == 4 and lhs_shape[1] == rhs_shape[1]:
         assert all(isinstance(i, IntImm) for i in lhs_shape[1:])
         assert all(isinstance(i, IntImm) for i in rhs_shape[1:])
@@ -1013,7 +1028,7 @@ def acc_ops_matmul(
             shape_1 = (batch_size * channel, K, N)
             shape_2 = (batch_size, channel, M, N)
         elif isinstance(lhs_shape[0], IntVar) and isinstance(rhs_shape[0], IntVar):
-            if lhs_shape[0]._attrs["values"] != rhs_shape[0]._attrs["values"]:
+            if lhs_shape[0] != rhs_shape[0]:
                 raise ValueError(
                     f"Batch size mismatch on matmul. Expected: {lhs_shape[0]} == {rhs_shape[0]}"
                 )
@@ -1028,7 +1043,7 @@ def acc_ops_matmul(
             )
         reshape_op_0 = reshape()(lhs, shape_0)
         reshape_op_1 = reshape()(rhs, shape_1)
-        return reshape()(acc_ops_bmm(name, reshape_op_0, reshape_op_1), shape_2)
+        return reshape()(bmm_rrr()(reshape_op_0, reshape_op_1), shape_2)
     else:
         raise NotImplementedError(
             f"This case is unsupported in {name}: {len(lhs_shape)} and {len(rhs_shape)}"
@@ -1591,11 +1606,11 @@ def acc_ops_tile(
     input_dim_len = len(input_val.shape())
     result = input_val
     if len(shape_dims) < input_dim_len:
-        for i in range(input_dim_len - len(shape_dims)):
+        for _ in range(input_dim_len - len(shape_dims)):
             shape_dims.insert(0, 1)
     if input_dim_len < len(shape_dims):
         shape = input_val.shape()
-        for i in range(len(shape_dims) - input_dim_len):
+        for _ in range(len(shape_dims) - input_dim_len):
             shape.insert(0, IntImm(1))
         result = expand()(input_val, shape)
 
@@ -1632,3 +1647,83 @@ def acc_ops_neg(
         raise ValueError(f"Unexpected input dtype {dt}")
 
     return create_binary_op(FuncEnum.MUL, args, new_kwargs, name)
+
+
+@ait_converter(acc_ops.new_full)
+def acc_ops_new_full(
+    target: Target, args: Tuple[Argument, ...], kwargs: Dict[str, Argument], name: str
+) -> ConverterOutput:
+    input_val = kwargs["input"]
+    if not isinstance(input_val, AITTensor):
+        raise RuntimeError(f"Non-tensor inputs for {name}: {input_val}")
+    size = kwargs["size"]
+    dtype = (
+        kwargs["dtype"]
+        if "dtype" in kwargs and kwargs["dtype"] is not None
+        else input_val.dtype()
+    )
+    fill_value = kwargs["fill_value"]
+    return full()(size, fill_value=fill_value, dtype=dtype)
+
+
+@ait_converter(acc_ops.full_like)
+def acc_ops_full_like(
+    target: Target, args: Tuple[Argument, ...], kwargs: Dict[str, Argument], name: str
+) -> ConverterOutput:
+    input_val = kwargs["input"]
+    if not isinstance(input_val, AITTensor):
+        raise RuntimeError(f"Non-tensor inputs for {name}: {input_val}")
+    fill_value = kwargs["fill_value"]
+    return full()(input_val.shape(), fill_value=fill_value, dtype=input_val.dtype())
+
+
+@ait_converter(acc_ops.new_ones)
+def acc_ops_new_ones(
+    target: Target, args: Tuple[Argument, ...], kwargs: Dict[str, Argument], name: str
+) -> ConverterOutput:
+    input_val = kwargs["input"]
+    if not isinstance(input_val, AITTensor):
+        raise RuntimeError(f"Non-tensor inputs for {name}: {input_val}")
+    size = kwargs["size"]
+    dtype = (
+        kwargs["dtype"]
+        if "dtype" in kwargs and kwargs["dtype"] is not None
+        else input_val.dtype()
+    )
+    return full()(size, 1, dtype=dtype)
+
+
+@ait_converter(acc_ops.ones_like)
+def acc_ops_ones_like(
+    target: Target, args: Tuple[Argument, ...], kwargs: Dict[str, Argument], name: str
+) -> ConverterOutput:
+    input_val = kwargs["input"]
+    if not isinstance(input_val, AITTensor):
+        raise RuntimeError(f"Non-tensor inputs for {name}: {input_val}")
+    return full()(input_val.shape(), 1, dtype=input_val.dtype())
+
+
+@ait_converter(acc_ops.new_zeros)
+def acc_ops_new_zeros(
+    target: Target, args: Tuple[Argument, ...], kwargs: Dict[str, Argument], name: str
+) -> ConverterOutput:
+    input_val = kwargs["input"]
+    if not isinstance(input_val, AITTensor):
+        raise RuntimeError(f"Non-tensor inputs for {name}: {input_val}")
+    size = kwargs["size"]
+    dtype = (
+        kwargs["dtype"]
+        if "dtype" in kwargs and kwargs["dtype"] is not None
+        else input_val.dtype()
+    )
+    return full()(size, 0, dtype=dtype)
+
+
+@ait_converter(acc_ops.zeros_like)
+def acc_ops_zeros_like(
+    target: Target, args: Tuple[Argument, ...], kwargs: Dict[str, Argument], name: str
+) -> ConverterOutput:
+    input_val = kwargs["input"]
+    if not isinstance(input_val, AITTensor):
+        raise RuntimeError(f"Non-tensor inputs for {name}: {input_val}")
+    return full()(input_val.shape(), 0, dtype=input_val.dtype())

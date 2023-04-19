@@ -16,8 +16,8 @@
 Codegen for conv2d_depthwise.
 """
 
-from ... import registry
-from . import common, conv2d_depthwise as cdw
+from aitemplate.backend import registry
+from aitemplate.backend.cuda.conv2d import common, conv2d_depthwise as cdw
 
 # pylint: disable=C0103,C0415,W0613,C0301
 
@@ -46,14 +46,14 @@ def gen_profiler(func_attrs, workdir, profiler_filename, shape_template):
 @registry.reg("cuda.conv2d_depthwise_bias.gen_function")
 def gen_function(
     func_attrs,
-    exec_cond_remplate,
+    exec_cond_template,
     shape_eval_template,
     shape_save_template,
 ):
     """Codegen for conv2d_depthwise_bias function."""
     return common.gen_function(
         func_attrs=func_attrs,
-        exec_cond_remplate=exec_cond_remplate,
+        exec_cond_template=exec_cond_template,
         shape_eval_template=shape_eval_template,
         shape_save_template=shape_save_template,
         f_emit_instance=cdw.emit_instance,

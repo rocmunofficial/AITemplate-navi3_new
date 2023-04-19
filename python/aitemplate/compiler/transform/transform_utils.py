@@ -20,13 +20,14 @@ import logging
 from collections import deque
 from typing import Dict, List, Union
 
-from aitemplate.compiler.stable_set import StableSet
+from aitemplate.compiler.base import Operator, Tensor
 
-from ...utils import graph_utils
-from ..base import Operator, Tensor
-from .mark_param_tensor import mark_param_tensor
-from .name_graph import name_graph
-from .remove_unused_ops import remove_unused_ops
+from aitemplate.compiler.stable_set import StableSet
+from aitemplate.compiler.transform.mark_param_tensor import mark_param_tensor
+from aitemplate.compiler.transform.name_graph import name_graph
+from aitemplate.compiler.transform.remove_unused_ops import remove_unused_ops
+
+from aitemplate.utils import graph_utils
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -226,7 +227,8 @@ def remove_view_op_from_sorted_graph(op: Operator) -> None:
     input_tensor = op._attrs["inputs"][0]
     output_tensor = op._attrs["outputs"][0]
 
-    input_tensor._attrs["dst_ops"] = output_tensor._attrs["dst_ops"]
+    input_tensor._attrs["dst_ops"].remove(op)
+    input_tensor._attrs["dst_ops"].update(output_tensor._attrs["dst_ops"])
     for dst_op in output_tensor._attrs["dst_ops"]:
         dst_op.replace_input_tensor(output_tensor, input_tensor)
     if output_tensor._attrs["is_output"]:
@@ -258,7 +260,7 @@ def sanitize_sorted_graph(sorted_graph: List[Tensor]) -> List[Tensor]:
     """
     Removes tensors whose src_op and dst_ops are empty.
     Inputs and outputs are always kept in the graph.
-    Names unamed tensors.
+    Names unnamed tensors.
     """
 
     if len(sorted_graph) == 1:

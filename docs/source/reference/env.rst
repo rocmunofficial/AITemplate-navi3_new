@@ -14,6 +14,8 @@ Codegen
 
 **AIT_COMPILER_OPT**: The optimization level for a compiler, which is directly passed to the host compiler command line. AITemplate host code may be very light in certain cases, so there is nothing to optimize for a host compiler. Thus, there is no need to make host compiler perform time costly optimizations. It may be very useful to use "-O0" value for debugging GPU kernels. "-O3" by default.
 
+**AIT_TIME_COMPILATION**: If set to "1", time each make command at the compilation time. This helps us to do compilation time analysis. Requires to install `time <https://man7.org/linux/man-pages/man1/time.1.html>`_ package.
+
 Profiling
 ---------
 
@@ -27,7 +29,11 @@ Profiling
 
 **HIP_VISIBLE_DEVICES**: This one is from ROCm itself. It's used to set the number of GPU devices available for profiling. Set to "0,1,2,3,4,5,6,7" to speed up profiling. For benchmarking, it's useful to set to a particular device to lower noise.
 
-**FORCE_PROFILE**: If set to "1", it will do profiling regarless in_ci_env and disable_profiler_codegen. For non-NIGHTLY CI, we do not do profiling, and we could use FORCE_PROFILE=1 in these CI to do runs with codegen, compile, and profile.
+**FORCE_PROFILE**: If set to "1", it will do profiling regardless in_ci_env and disable_profiler_codegen. For non-NIGHTLY CI, we do not do profiling, and we could use FORCE_PROFILE=1 in these CI to do runs with codegen, compile, and profile.
+
+**COMBINE_PROFILER_MULTI_SOURCES**: Whether to combine multiple profiler sources per target. "0" - Disabled, "1" - Enabled (default).
+
+**FORCE_ONE_PROFILER_SOURCE_PER_TARGET**: Whether to combine multiple profiler sources per target into one. "0" - Disabled (default), "1" - Enabled.
 
 OSS CI
 ------
@@ -40,3 +46,5 @@ Miscellaneous
 -------------
 
 **LOGLEVEL**: It is used to control the logging level in Python. The default value is "INFO". "DEBUG" is useful for debugging.
+
+**AIT_PLOT_SHORTEN_TENSOR_NAMES**: If set to "1", shorten too long tensor names for a plot of a model graph, thus making a plot much easier to analyze visually. "0" by default.

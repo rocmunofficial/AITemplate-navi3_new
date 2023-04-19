@@ -15,13 +15,23 @@
 """
 miscellaneous utilities
 """
+import hashlib
 import logging
 import os
+import platform
 
 
 def is_debug():
     logger = logging.getLogger("aitemplate")
     return logger.level == logging.DEBUG
+
+
+def is_linux() -> bool:
+    return platform.system() == "Linux"
+
+
+def is_windows() -> bool:
+    return os.name == "nt"
 
 
 def setup_logger(name):
@@ -41,3 +51,11 @@ def setup_logger(name):
     )
     root_logger.setLevel(LOG_LEVEL)
     return root_logger
+
+
+def short_str(s, length=8) -> str:
+    """
+    Returns a hashed string, somewhat similar to URL shortener.
+    """
+    hash_str = hashlib.sha256(s.encode()).hexdigest()
+    return hash_str[0:length]

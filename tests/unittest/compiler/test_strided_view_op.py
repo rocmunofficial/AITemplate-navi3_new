@@ -87,9 +87,9 @@ def _gen_simple_strided_ops(
     return test_cases
 
 
-def _gen_fusible_view_ops_after_strided_op() -> List[
-    Tuple[str, Callable[[Tensor], Tensor], str]
-]:
+def _gen_fusible_view_ops_after_strided_op() -> (
+    List[Tuple[str, Callable[[Tensor], Tensor], str]]
+):
     def reshape_op(input_tensor: Tensor):
         shape = input_tensor._attrs["shape"]
         return ops.reshape()(
@@ -110,9 +110,9 @@ def _gen_fusible_view_ops_after_strided_op() -> List[
     return test_cases
 
 
-def _gen_non_fusible_view_ops_after_strided_op() -> List[
-    Tuple[str, Callable[[Tensor], Tensor], str]
-]:
+def _gen_non_fusible_view_ops_after_strided_op() -> (
+    List[Tuple[str, Callable[[Tensor], Tensor], str]]
+):
     def reshape_op(input_tensor: Tensor):
         n2 = input_tensor._attrs["shape"][2].value()
         return ops.reshape()(input_tensor, [-1, n2])
@@ -130,9 +130,9 @@ def _gen_non_fusible_view_ops_after_strided_op() -> List[
     return test_cases
 
 
-def _gen_multiple_fusible_view_ops_after_strided_op() -> List[
-    Tuple[str, Callable[[Tensor], Tensor], str]
-]:
+def _gen_multiple_fusible_view_ops_after_strided_op() -> (
+    List[Tuple[str, Callable[[Tensor], Tensor], str]]
+):
     def _get_shape(input_tensor: Tensor):
         return (
             input_tensor._attrs["shape"][1].value(),
@@ -172,10 +172,6 @@ class StridedViewOpTestCase(unittest.TestCase):
         super(StridedViewOpTestCase, self).__init__(*args, **kwargs)
         self._test_id = 0
 
-    @unittest.skipIf(
-        detect_target().name() == "cuda" and int(detect_target()._arch) < 80,
-        "Not supported by cuda sm<80",
-    )
     @parameterized.expand(
         [
             param(f"single_gemm_{name}_fusion_{dtype}", func, dtype)
@@ -284,10 +280,6 @@ class StridedViewOpTestCase(unittest.TestCase):
             self.assertTrue(torch.allclose(y, y_pt, atol=1e-2, rtol=1e-2))
             self._test_id += 1
 
-    @unittest.skipIf(
-        detect_target().name() == "cuda" and int(detect_target()._arch) < 80,
-        "Not supported by cuda sm<80",
-    )
     @parameterized.expand(
         [
             param(
@@ -339,10 +331,6 @@ class StridedViewOpTestCase(unittest.TestCase):
             self.assertTrue(torch.allclose(y, y_pt, atol=1e-2, rtol=1e-2))
             self._test_id += 1
 
-    @unittest.skipIf(
-        detect_target().name() == "cuda" and int(detect_target()._arch) < 80,
-        "Not supported by cuda sm<80",
-    )
     @parameterized.expand(
         [
             param(f"single_op_{name}_non_fusion_{dtype}", func, dtype)
@@ -469,10 +457,6 @@ class StridedViewOpTestCase(unittest.TestCase):
             self.assertTrue(torch.allclose(y1, y1_pt, atol=1e-2, rtol=1e-2))
             self.assertTrue(torch.allclose(y2, y2_pt, atol=1e-2, rtol=1e-2))
 
-    @unittest.skipIf(
-        detect_target().name() == "cuda" and int(detect_target()._arch) < 80,
-        "Not supported by cuda sm<80",
-    )
     def test_two_views(self):
         self._test_two_parallel_views()
         self._test_two_serial_view_outputs()

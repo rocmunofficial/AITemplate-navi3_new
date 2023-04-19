@@ -15,12 +15,9 @@
 import logging
 
 import click
-
 import torch
-
 from aitemplate.testing import detect_target
 from aitemplate.utils.import_path import import_parent
-
 from diffusers import StableDiffusionPipeline
 
 if __name__ == "__main__":
@@ -57,6 +54,10 @@ def compile_diffusers(
         torch_dtype=torch.float16,
     ).to("cuda")
 
+    assert (
+        height % 64 == 0 and width % 64 == 0
+    ), "Height and Width must be multiples of 64, otherwise, the compilation process will fail."
+
     ww = width // 8
     hh = height // 8
 
@@ -81,6 +82,7 @@ def compile_diffusers(
         convert_conv_to_gemm=convert_conv_to_gemm,
         hidden_dim=pipe.unet.config.cross_attention_dim,
         attention_head_dim=pipe.unet.config.attention_head_dim,
+        use_linear_projection=pipe.unet.config.get("use_linear_projection", False),
     )
     # VAE
     compile_vae(

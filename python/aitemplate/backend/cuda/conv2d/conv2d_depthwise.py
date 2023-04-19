@@ -17,11 +17,11 @@ Codegen for conv2d_depthwise.
 """
 from collections import OrderedDict
 
-from aitemplate.backend.backend_spec import CUDASpec
+from aitemplate.backend import registry
 
-from ... import registry
-from ...target import Target
-from . import common
+from aitemplate.backend.backend_spec import CUDASpec
+from aitemplate.backend.cuda.conv2d import common
+from aitemplate.backend.target import Target
 
 # pylint: disable=C0103,C0415,W0613,C0301
 
@@ -85,7 +85,6 @@ def extract_config(func_attrs, dtype="float16"):
             and op.accumulator_type() == acc_type
             and op.group_mode == cutlass_lib.library.GroupMode.NoneGroup
         ):
-
             op = copy.deepcopy(op)
             # set epilogue
             epilogue_name = func_attrs["epilogue"]
@@ -144,14 +143,14 @@ def gen_profiler(
 @registry.reg("cuda.conv2d_depthwise.gen_function")
 def gen_function(
     func_attrs,
-    exec_cond_remplate,
+    exec_cond_template,
     shape_eval_template,
     shape_save_template,
 ):
     """Codegen for conv2d_depthwise function."""
     return common.gen_function(
         func_attrs=func_attrs,
-        exec_cond_remplate=exec_cond_remplate,
+        exec_cond_template=exec_cond_template,
         shape_eval_template=shape_eval_template,
         shape_save_template=shape_save_template,
         is_depthwise=True,

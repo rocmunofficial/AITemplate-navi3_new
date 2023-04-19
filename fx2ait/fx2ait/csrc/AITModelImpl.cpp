@@ -1,3 +1,17 @@
+//  Copyright (c) Meta Platforms, Inc. and affiliates.
+//
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
+//
 #include "AITModelImpl.h" // @manual
 
 #include <type_traits>
@@ -7,14 +21,17 @@
 
 #include "ATen/Context.h" // @manual
 #ifdef __HIP_PLATFORM_HCC__
+#include "rocm_device_functions.h"
 #include "ATen/hip/HIPContext.h"
 #include "c10/core/CPUAllocator.h"
 #include "c10/hip/HIPStream.h"
 #else
+#include "cuda_device_functions.h"
 #include "ATen/cuda/CUDAContext.h"
 #include "c10/core/CPUAllocator.h"
 #include "c10/cuda/CUDAStream.h"
 #endif
+
 
 #ifdef FBCODE_AIT
 #include "folly/MapUtil.h"
@@ -146,27 +163,12 @@ AITModelImpl::AITModelImpl(
   // It's not clear what stream we want to use yet. Create a new one.
   // We could alternatively use the default stream, but that could cause extra
   // synchronization.
-#ifdef __HIP_PLATFORM_HCC__
-  hipStream_t creation_stream;
-  TORCH_CHECK(
-      hipStreamCreateWithFlags(&creation_stream, hipStreamNonBlocking) ==
-      hipSuccess);
-
+  ait::StreamType creation_stream;
+  ait::StreamCreate(&creation_stream, true);
   using StreamGuard = std::unique_ptr<
-      std::remove_pointer_t<hipStream_t>,
-      decltype(&hipStreamDestroy)>;
-  StreamGuard creation_stream_guard{creation_stream, hipStreamDestroy};
-#else
-  cudaStream_t creation_stream;
-  TORCH_CHECK(
-      cudaStreamCreateWithFlags(&creation_stream, cudaStreamNonBlocking) ==
-      cudaSuccess);
-
-  using StreamGuard = std::unique_ptr<
-      std::remove_pointer_t<cudaStream_t>,
-      decltype(&cudaStreamDestroy)>;
-  StreamGuard creation_stream_guard{creation_stream, cudaStreamDestroy};
-#endif
+      std::remove_pointer_t<ait::StreamType>,
+      decltype(&ait::StreamDestroy)>;
+  StreamGuard creation_stream_guard{creation_stream, ait::StreamDestroy};
 
 #define LOAD_SYMBOL(var, name_str)                                       \
   var = reinterpret_cast<decltype(var)>(dlsym(handle_.get(), name_str)); \
@@ -331,8 +333,7 @@ void AITModelImpl::allocateOutputs(
         allocator->allocate(size_bytes),
         allocator,
         /*resizable=*/true);
-    ait_outputs.emplace_back(
-        storage_impl->unsafe_data<void>(), shape, ait_dtype);
+    ait_outputs.emplace_back(storage_impl->mutable_data(), shape, ait_dtype);
     output_index_to_output_storage_impl[output_index] = std::move(storage_impl);
   }
 }
@@ -630,27 +631,14 @@ void AITModelImpl::updateConstantsWithWeights(
         "failing this round of weight update");
     constants.emplace_back(torchToAitData(it->second));
   }
-#ifdef __HIP_PLATFORM_HCC__
-  hipStream_t constants_stream;
-  TORCH_CHECK(
-      hipStreamCreateWithFlags(&constants_stream, hipStreamNonBlocking) ==
-      hipSuccess);
 
+  ait::StreamType constants_stream;
+  ait::StreamCreate(&constants_stream, true);
   using StreamGuard = std::unique_ptr<
-      std::remove_pointer_t<hipStream_t>,
-      decltype(&hipStreamDestroy)>;
-  StreamGuard constants_stream_guard{constants_stream, hipStreamDestroy};
-#else
-  cudaStream_t constants_stream;
-  TORCH_CHECK(
-      cudaStreamCreateWithFlags(&constants_stream, cudaStreamNonBlocking) ==
-      cudaSuccess);
+      std::remove_pointer_t<ait::StreamType>,
+      decltype(&ait::StreamDestroy)>;
+  StreamGuard constants_stream_guard{constants_stream, ait::StreamDestroy};
 
-  using StreamGuard = std::unique_ptr<
-      std::remove_pointer_t<cudaStream_t>,
-      decltype(&cudaStreamDestroy)>;
-  StreamGuard constants_stream_guard{constants_stream, cudaStreamDestroy};
-#endif
   AIT_CHECK(setManyConstantsDoubleBufferFunc_(
       model_handle_,
       /*stream=*/reinterpret_cast<AITemplateStreamOpaque*>(constants_stream),

@@ -22,7 +22,7 @@ from hashlib import sha1
 
 import jinja2
 
-from ...target import Target
+from aitemplate.backend.target import Target
 
 # pylint: disable=C0103,C0415,W0611,C0301
 
@@ -574,7 +574,6 @@ def gen_profiler(
     src_template=SRC_TEMPLATE,
     prob_args_template=PROBLEM_ARGS_TEMPLATE,
 ):
-
     """Generates standalone executables for profiler.
 
     Parameters
@@ -605,9 +604,12 @@ def gen_profiler(
         w_dim0="out_ch",
         w_dim1="kernel_h",
         w_dim2="kernel_w",
-        stride="stride",
-        dilate="dilation",
-        pad="pad",
+        strideh="stride",
+        dilateh="dilation",
+        padh="pad",
+        stridew="stride",
+        dilatew="dilation",
+        padw="pad",
     )
     file_pairs = []
     for op_name, op in op_instance.items():
@@ -685,7 +687,7 @@ def gen_profiler(
 
 def gen_function(
     func_attrs,
-    exec_cond_remplate,
+    exec_cond_template,
     shape_eval_template,
     shape_save_template,
     conv2d_flag,
@@ -698,7 +700,7 @@ def gen_function(
     ----------
     func_attrs : Dict
         Operation attributes.
-    exec_cond_remplate : jinja2.Template
+    exec_cond_template : jinja2.Template
         Generates if statement to execute kernel.
     shape_eval_template : jinja2.Template
         Generates shape calculation.
@@ -747,9 +749,12 @@ def gen_function(
         w_dim0="*out_ch",
         w_dim1="*kernel_h",
         w_dim2="*kernel_w",
-        stride="stride",
-        dilate="dilation",
-        pad="pad",
+        strideh="stride",
+        dilateh="dilation",
+        padh="pad",
+        stridew="stride",
+        dilatew="dilation",
+        padw="pad",
         div="/",
     )
     shape_save_func = shape_save_template.render(
@@ -773,7 +778,7 @@ def gen_function(
             problem_args=problem_args,
             is_profiler=False,
         )
-        exec_inst = exec_cond_remplate.render(indent="  ", cond=key, program=program)
+        exec_inst = exec_cond_template.render(indent="  ", cond=key, program=program)
         exec_paths += exec_inst
     return src_template.render(
         instances=instance_decl,

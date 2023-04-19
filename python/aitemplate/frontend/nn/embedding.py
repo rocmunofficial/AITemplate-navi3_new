@@ -12,12 +12,11 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
-
-from ...compiler import ops
-from .dropout import Dropout
-from .layer_norm import LayerNorm
-from .module import Module
-from .parameter import Parameter
+from aitemplate.compiler import ops
+from aitemplate.frontend.nn.dropout import Dropout
+from aitemplate.frontend.nn.layer_norm import LayerNorm
+from aitemplate.frontend.nn.module import Module
+from aitemplate.frontend.nn.parameter import Parameter
 
 
 class Embedding(Module):
@@ -60,8 +59,6 @@ class BertEmbeddings(Module):
         dtype="float16",
     ):
         super().__init__()
-        if BertEmbeddings.USE_CUDA is None:
-            BertEmbeddings.USE_CUDA = detect_target().name() == "cuda"
         assert (
             hidden_dropout_prob == 0.0
         ), "Dropout rate larger than 0 is not supported yet."

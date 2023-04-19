@@ -38,8 +38,7 @@ from aitemplate.compiler.ops.common.epilogue import FuncEnum
 from aitemplate.compiler.ops.common.int_elementwise import int_elementwise
 
 """GEMM"""
-from aitemplate.compiler.ops.gemm_universal.bmm_rcr import bmm_rcr
-from aitemplate.compiler.ops.gemm_universal.bmm_rrr import bmm_rrr
+from aitemplate.compiler.ops.gemm_universal.bmm_xxx import bmm_rcr, bmm_rrr
 from aitemplate.compiler.ops.gemm_universal.gemm_rcr import gemm_rcr
 from aitemplate.compiler.ops.gemm_universal.gemm_rcr_bias import gemm_rcr_bias
 from aitemplate.compiler.ops.gemm_universal.gemm_rrr import gemm_rrr
@@ -80,6 +79,7 @@ from aitemplate.compiler.ops.tensor.chunk import chunk
 from aitemplate.compiler.ops.tensor.concatenate import concatenate
 from aitemplate.compiler.ops.tensor.dynamic_slice import dynamic_slice
 from aitemplate.compiler.ops.tensor.expand import expand
+from aitemplate.compiler.ops.tensor.full import full
 from aitemplate.compiler.ops.tensor.permute import permute
 from aitemplate.compiler.ops.tensor.split import split
 

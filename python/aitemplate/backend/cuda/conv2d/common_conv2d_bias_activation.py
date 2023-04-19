@@ -16,7 +16,7 @@
 common functions for conv_bias_activation subgraph
 """
 
-from . import common
+from aitemplate.backend.cuda.conv2d import common
 
 # pylint: disable=C0103,C0301
 
@@ -44,13 +44,13 @@ def gen_profiler(
 
 def gen_function(
     func_attrs,
-    exec_cond_remplate,
+    exec_cond_template,
     shape_eval_template,
     shape_save_template,
 ):
     return common.gen_function(
         func_attrs=func_attrs,
-        exec_cond_remplate=exec_cond_remplate,
+        exec_cond_template=exec_cond_template,
         shape_eval_template=shape_eval_template,
         shape_save_template=shape_save_template,
         is_bias=True,

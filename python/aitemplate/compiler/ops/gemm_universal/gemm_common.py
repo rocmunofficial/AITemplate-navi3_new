@@ -25,19 +25,30 @@ from dataclasses import dataclass
 from enum import Enum
 from hashlib import sha1
 from operator import itemgetter
-from typing import Any, Dict, List, Union
+from time import sleep
+from typing import Any, Callable, Dict, List, Union
 
 import jinja2
 
-from aitemplate.backend.profiler_runner import ProfileResult
+from aitemplate import backend
+from aitemplate.backend import registry
 
-from .... import backend
-from ....backend import registry
-from ....utils import alignment, environ
-from ...base import DynamicProfileStrategy, ExecItem, IntImm, IntVar, Operator, Tensor
-from ...dtype import is_same_dtype
-from ...tensor_accessor import TensorAccessor
-from .cache_entry import GemmQueryEntry, GemmRecordEntry
+from aitemplate.backend.profiler_runner import ProfileResult
+from aitemplate.compiler.base import (
+    DynamicProfileStrategy,
+    ExecItem,
+    IntImm,
+    IntVar,
+    Operator,
+    Tensor,
+)
+from aitemplate.compiler.dtype import is_same_dtype
+from aitemplate.compiler.ops.gemm_universal.cache_entry import (
+    GemmQueryEntry,
+    GemmRecordEntry,
+)
+from aitemplate.compiler.tensor_accessor import TensorAccessor
+from aitemplate.utils import alignment, environ
 
 # pylint: disable=C0103,R1711,W0102,W0221,E1120
 
@@ -169,6 +180,22 @@ def _to_list(elem):
         return [elem]
 
 
+def _check_with_retries(
+    condition: Callable[[], bool],
+    max_attempts: int = 3,
+    delay_seconds: int = 5,
+) -> bool:
+    """Check a condition with retries."""
+    attempts = 0
+    while True:
+        if condition():
+            return True
+        attempts += 1
+        if attempts >= max_attempts:
+            return False
+        sleep(delay_seconds)
+
+
 class gemm(Operator):
     """Base gemm operators"""
 
@@ -211,7 +238,6 @@ class gemm(Operator):
 
         dtype = self._attrs["inputs"][0].dtype()
         self._attrs["epilogue_alignment"] = alignment.find_max_alignment(shape, dtype)
-        return
 
     def _infer_shapes(self, a: Tensor, b: Tensor):
         raise NotImplementedError("_infer_shapes() is not implemented!")
@@ -296,7 +322,7 @@ class gemm(Operator):
         """
 
         dim_info_dict: Dict[str, List[DimInfo]] = self._extract_dims()
-        dim_dict: Dict[str, IntVar] = {}
+        dim_dict: Dict[str, List[IntVar]] = {}
         for name, dim_infos in dim_info_dict.items():
             dim_info = None
             for d in dim_infos:
@@ -399,7 +425,7 @@ class gemm(Operator):
         entry for this gemm instance, we update this gemm op's
         relevant attributes with the cached result and return False.
         """
-        # We are forced to use the cache so we skip building profilers.
+        # We are forced to use the cache, so we skip building profilers.
         if environ.force_profiler_cache():
             return False
         target = backend.target.Target.current()
@@ -486,11 +512,9 @@ class gemm(Operator):
         filter_func = registry.get(func_key)
         # run compile-time filter
         new_op_instance = OrderedDict(
-            {
-                k: v
-                for k, v in self._attrs["op_instance"].items()
-                if filter_func(k, self._attrs, ab_alignments[0])
-            }
+            (k, v)
+            for k, v in self._attrs["op_instance"].items()
+            if filter_func(k, self._attrs, ab_alignments[0])
         )
         _LOGGER.debug(
             f"Filtered profiler kernels for {self._attrs['op']}: reduced the "
@@ -525,8 +549,13 @@ class gemm(Operator):
         self, profiler_prefix, profiler_filename, exec_key, fbuild_cmd
     ):
         exe_path = os.path.join(profiler_prefix, profiler_filename)
-        if not os.access(exe_path, os.X_OK):
+        if not _check_with_retries(
+            condition=lambda: os.access(exe_path, os.X_OK),
+            max_attempts=3,
+            delay_seconds=5,
+        ):
             raise RuntimeError("Profiler %s is not executable" % exe_path)
+
         cmd_args = fbuild_cmd(exec_key)
         cmd = [exe_path]
         # mnk

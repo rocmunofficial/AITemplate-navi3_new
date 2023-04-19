@@ -14,16 +14,10 @@
 //
 #pragma once
 
+#include <sstream>
 #include <string>
 
-#include "cutlass/conv/conv2d_problem_size.h"
-#include "cutlass/conv/device/implicit_gemm_convolution.h"
-#include "cutlass/conv/kernel/default_conv2d_fprop.h"
-#include "cutlass/cutlass.h"
-#include "cutlass/util/host_tensor.h"
-#include "cutlass/util/reference/host/tensor_fill.h"
-
-#include <nvtx3/nvToolsExt.h>
+#include <cuda_runtime.h>
 
 namespace ait {
 
@@ -365,7 +359,8 @@ inline DeviceError GetLastError() {
 }
 
 inline std::string GetLastErrorString() {
-  return cudaGetErrorString(cudaGetLastError());
+  auto err = cudaGetLastError();
+  return cudaGetErrorString(err);
 }
 
 inline DeviceError StreamSynchronize(StreamType stream) {

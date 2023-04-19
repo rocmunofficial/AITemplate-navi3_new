@@ -28,9 +28,13 @@ The main responsibilities of the make_jagged backend are:
   of the constraints can be checked on the device, in which
   case an std::runtime_error is thrown on violation.
 """
+from typing import Set
+
 import jinja2
 
-from ....backend import registry
+from aitemplate.backend import registry
+from aitemplate.backend.backend_spec import CUDASpec
+from aitemplate.compiler.base import IntImm, IntVar, JaggedIntVar
 
 
 SRC_TEMPLATE = jinja2.Template(
@@ -39,6 +43,9 @@ SRC_TEMPLATE = jinja2.Template(
 #include <stdexcept>
 
 #include "jagged.h"
+
+
+#define THREADS_PER_BLOCK 128
 
 
 namespace {
@@ -53,57 +60,74 @@ __global__ void check_offsets(
   {{offsets_struct_type}} offsets,
   OffsetBounds bounds
 ) {
-  int64_t length = offsets.lengths[blockIdx.x];
-  const {{offsets_type}}* data = offsets.data[blockIdx.x];
+  {{index_type}} dim_id = blockIdx.y;
+  {{index_type}} offset_id = blockIdx.x * THREADS_PER_BLOCK + threadIdx.x;
 
-  if (threadIdx.x >= length - 1) {
+  {{index_type}} length = offsets.lengths[dim_id];
+  const {{offsets_type}}* data = offsets.data[dim_id];
+
+  if (offset_id >= length - 1) {
     // out of bounds of the offset array
     return;
   }
 
-  {{offsets_type}} group_size = data[threadIdx.x + 1] - data[threadIdx.x];
-  if (group_size < bounds.min_values[blockIdx.x] || group_size > bounds.max_values[blockIdx.x]) {
+{% if check_sequence_lengths %}
+  {{offsets_type}} group_size = data[offset_id + 1] - data[offset_id];
+  if (group_size < bounds.min_values[dim_id] || group_size > bounds.max_values[dim_id]) {
     printf(
-      "\\n[func name: {{func_name}}, blockIdx.x: %d, threadIdx.x: %d]: "
+      "\\n[func name: {{func_name}}, block: [%d, %d, %d], thread: [%d, %d, %d]]: "
       "Error: the offset difference %d is out of bounds of the jagged dimension %d (min: %d, max: %d).",
       (int32_t)blockIdx.x,
+      (int32_t)blockIdx.y,
+      (int32_t)blockIdx.z,
       (int32_t)threadIdx.x,
+      (int32_t)threadIdx.y,
+      (int32_t)threadIdx.z,
       (int32_t)group_size,
-      (int32_t)blockIdx.x,
-      (int32_t)bounds.min_values[blockIdx.x],
-      (int32_t)bounds.max_values[blockIdx.x]
+      (int32_t)dim_id,
+      (int32_t)bounds.min_values[dim_id],
+      (int32_t)bounds.max_values[dim_id]
     );
     __trap();
   }
+{% endif %}
 
-  if (threadIdx.x == 0) {
+  if (offset_id == 0) {
     {{offsets_type}} first_offset = data[0];
     if (first_offset != 0)
     {
       printf(
-        "\\n[func name: {{func_name}}, blockIdx.x: %d, threadIdx.x: %d]: "
+      "\\n[func name: {{func_name}}, block: [%d, %d, %d], thread: [%d, %d, %d]]: "
         "Error: the first offset of the jagged dimension %d is non-zero: %d.",
         (int32_t)blockIdx.x,
+        (int32_t)blockIdx.y,
+        (int32_t)blockIdx.z,
         (int32_t)threadIdx.x,
-        (int32_t)blockIdx.x,
+        (int32_t)threadIdx.y,
+        (int32_t)threadIdx.z,
+        (int32_t)dim_id,
         (int32_t)first_offset
       );
       __trap();
     }
   }
 
-  if (threadIdx.x == length - 2) {
+  if (offset_id == length - 2) {
     {{offsets_type}} last_offset = data[length - 1];
-    if (last_offset != bounds.last_values[blockIdx.x])
+    if (last_offset != bounds.last_values[dim_id])
     {
       printf(
-        "\\n[func name: {{func_name}}, blockIdx.x: %d, threadIdx.x: %d]: "
+      "\\n[func name: {{func_name}}, block: [%d, %d, %d], thread: [%d, %d, %d]]: "
         "Error: the last offset of the jagged dimension %d is incorrect: %d (must be %d).",
         (int32_t)blockIdx.x,
+        (int32_t)blockIdx.y,
+        (int32_t)blockIdx.z,
         (int32_t)threadIdx.x,
-        (int32_t)blockIdx.x,
+        (int32_t)threadIdx.y,
+        (int32_t)threadIdx.z,
+        (int32_t)dim_id,
         (int32_t)last_offset,
-        (int32_t)bounds.last_values[blockIdx.x]
+        (int32_t)bounds.last_values[dim_id]
       );
       __trap();
     }
@@ -115,29 +139,34 @@ __global__ void check_offsets(
 
 void {{func_name}}(
 {% for idx in range(num_offsets) %}
-  int64_t offsets_length_{{idx}},
+  {{index_type}} offsets_length_{{idx}},
   const void* offsets_data_{{idx}},
 {% endfor %}
+{% for name in jagged_dynamic_bound_names %}
+  {{index_type}} {{name}},
+{% endfor %}
   {{offsets_struct_type}}& offsets,
-  int64_t* batch_dim,
-  int64_t total_length
+  {{index_type}}* batch_dim,
+  {{index_type}} total_length,
+  cudaStream_t stream
 ) {
 {% for idx in range(num_offsets) %}
     offsets.lengths[{{idx}}] = offsets_length_{{idx}};
     offsets.data[{{idx}}] = reinterpret_cast<const {{offsets_type}}*>(offsets_data_{{idx}});
 {% endfor %}
 
-{% if set_batch_dim %}
-    // batch_dim must be set by this code
+{% if isolated_batch_dim %}
+    // batch_dim is not present in any input shape
+    // we should set it here from the offsets length
     *batch_dim = offsets.lengths[0] - 1;
 {% else %}
-    // batch_dim must have been set before this code
     if (*batch_dim != offsets.lengths[0] - 1) {
-      throw std::runtime_error("batch_dim != len(offsets[0]) - 1");
+        // batch_dim must have been set before this code
+        throw std::runtime_error("batch_dim != len(offsets[0]) - 1");
     }
 {% endif %}
 
-    int64_t max_offset_length = 0;
+    {{index_type}} max_offset_length = 0;
     for (int i = 0; i < {{num_offsets}}; ++i) {
         if (offsets.lengths[i] <= 1) {
             throw std::runtime_error("offset array's length must be at least 2");
@@ -154,7 +183,8 @@ void {{func_name}}(
     bounds.last_values[{{idx}}] = {{ "offsets.lengths[" + ((idx + 1) | string) + "] - 1" if idx < num_offsets - 1 else "total_length" }};
 {% endfor %}
 
-    check_offsets<<<{{num_offsets}}, max_offset_length - 1, 0, 0>>>(offsets, bounds);
+    dim3 grid_size((max_offset_length - 1 + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, {{num_offsets}});
+    check_offsets<<<grid_size, THREADS_PER_BLOCK, 0, stream>>>(offsets, bounds);
 }
 """,
     trim_blocks=True,
@@ -165,12 +195,16 @@ FUNC_DECL_TEMPLATE = jinja2.Template(
     """
 void {{func_name}}(
 {% for idx in range(num_offsets) %}
-  int64_t,
+  {{index_type}},
   const void*,
 {% endfor %}
+{% for _ in range(num_jagged_dynamic_bound_dims) %}
+  {{index_type}},
+{% endfor %}
   {{offsets_struct_type}}&,
-  int64_t*,
-  int64_t
+  {{index_type}}*,
+  {{index_type}},
+  cudaStream_t
 );
 """,
     trim_blocks=True,
@@ -184,9 +218,13 @@ FUNC_CALL_TEMPLATE = jinja2.Template(
 {{indent}}  {{offsets_first_dim_names[idx]}},
 {{indent}}  {{offsets_data_names[idx]}},
 {% endfor %}
+{% for name in jagged_dynamic_bound_names %}
+{{indent}}  {{name}},
+{% endfor %}
 {{indent}}  {{offsets_var_name}},
 {{indent}}  &{{batch_dim_name}},
-{{indent}}  {{source_first_dim_name}}
+{{indent}}  {{total_length_name}},
+{{indent}}  stream
 {{indent}});
 """,
     trim_blocks=True,
@@ -194,50 +232,104 @@ FUNC_CALL_TEMPLATE = jinja2.Template(
 )
 
 
+def _get_jagged_dynamic_bound_dims(jagged_int_var: JaggedIntVar) -> Set[IntVar]:
+    """Get the set of dynamic dims in JaggedIntVar's JaggedDims' min / max values."""
+    return set(
+        [
+            dim.min_value()
+            for dim in jagged_int_var.jagged_dims()
+            if type(dim.min_value()) == IntVar
+        ]
+        + [
+            dim.max_value()
+            for dim in jagged_int_var.jagged_dims()
+            if type(dim.max_value()) == IntVar
+        ]
+    )
+
+
 @registry.reg("cuda.make_jagged.gen_function")
 def make_jagged_gen_function(func_attrs):
     func_name = func_attrs["name"]
-    offsets_list = func_attrs["inputs"][1:]
+    num_sources = func_attrs["num_sources"]
+    offsets_list = func_attrs["inputs"][num_sources:]
+    backend_spec = CUDASpec()
 
     output = func_attrs["outputs"][0]
     jagged_int_var = output._attrs["shape"][0]
-    set_batch_dim = jagged_int_var.batch_dim()._attrs.get("isolated", False)
     offsets_struct_type = jagged_int_var.offsets_struct_type()
-    jagged_dim_min_values = [dim.min_value() for dim in jagged_int_var.jagged_dims()]
-    jagged_dim_max_values = [dim.max_value() for dim in jagged_int_var.jagged_dims()]
+
+    jagged_dim_min_values = [
+        dim.min_value().value()
+        if isinstance(dim.min_value(), IntImm)
+        else dim.min_value()._attrs["name"]
+        for dim in jagged_int_var.jagged_dims()
+    ]
+    jagged_dim_max_values = [
+        dim.max_value().value()
+        if isinstance(dim.max_value(), IntImm)
+        else dim.max_value()._attrs["name"]
+        for dim in jagged_int_var.jagged_dims()
+    ]
+
+    jagged_dynamic_bound_dims = _get_jagged_dynamic_bound_dims(jagged_int_var)
+    jagged_dynamic_bound_names = [
+        dim._attrs["name"] for dim in jagged_dynamic_bound_dims
+    ]
+
+    for dim in jagged_dynamic_bound_dims:
+        if dim._attrs.get("isolated", False):
+            raise ValueError(
+                "Dynamic dimension (IntVar) in the min / max value "
+                "of a JaggedDim in the JaggedIntVar is isolated "
+                f"(not present in any input shape): {jagged_int_var}."
+            )
+
+    batch_dim = jagged_int_var.batch_dim()
+    isolated_batch_dim = batch_dim._attrs.get("isolated", False)
+    check_sequence_lengths = func_attrs["check_sequence_lengths"]
 
     return SRC_TEMPLATE.render(
         func_name=func_name,
         num_offsets=len(offsets_list),
-        set_batch_dim=set_batch_dim,
         offsets_struct_type=offsets_struct_type,
         jagged_dim_min_values=jagged_dim_min_values,
         jagged_dim_max_values=jagged_dim_max_values,
         offsets_type=jagged_int_var.offsets_type(),
+        isolated_batch_dim=isolated_batch_dim,
+        jagged_dynamic_bound_names=jagged_dynamic_bound_names,
+        index_type=backend_spec.index_type,
+        check_sequence_lengths=check_sequence_lengths,
     )
 
 
 @registry.reg("cuda.make_jagged.func_decl")
 def make_jagged_gen_function_decl(func_attrs):
     func_name = func_attrs["name"]
-    offsets_list = func_attrs["inputs"][1:]
+    num_sources = func_attrs["num_sources"]
+    offsets_list = func_attrs["inputs"][num_sources:]
+    backend_spec = CUDASpec()
 
     output = func_attrs["outputs"][0]
     jagged_int_var = output._attrs["shape"][0]
     offsets_struct_type = jagged_int_var.offsets_struct_type()
+    jagged_dynamic_bound_dims = _get_jagged_dynamic_bound_dims(jagged_int_var)
 
     return FUNC_DECL_TEMPLATE.render(
         func_name=func_name,
         num_offsets=len(offsets_list),
         offsets_struct_type=offsets_struct_type,
+        num_jagged_dynamic_bound_dims=len(jagged_dynamic_bound_dims),
+        index_type=backend_spec.index_type,
     )
 
 
 @registry.reg("cuda.make_jagged.func_call")
 def make_jagged_gen_function_call(func_attrs, indent="  "):
     func_name = func_attrs["name"]
-    source = func_attrs["inputs"][0]
-    offsets_list = func_attrs["inputs"][1:]
+    num_sources = func_attrs["num_sources"]
+    total_length = func_attrs["inputs"][0]._attrs["shape"][0]
+    offsets_list = func_attrs["inputs"][num_sources:]
     output = func_attrs["outputs"][0]
     jagged_int_var = output._attrs["shape"][0]
 
@@ -246,7 +338,11 @@ def make_jagged_gen_function_call(func_attrs, indent="  "):
     ]
     offsets_data_names = [offsets._attrs["name"] for offsets in offsets_list]
     batch_dim_name = jagged_int_var.batch_dim()._attrs["name"]
-    source_first_dim_name = source._attrs["shape"][0]._attrs["name"]
+    total_length_name = total_length._attrs["name"]
+
+    jagged_dynamic_bound_names = [
+        dim._attrs["name"] for dim in _get_jagged_dynamic_bound_dims(jagged_int_var)
+    ]
 
     return FUNC_CALL_TEMPLATE.render(
         indent="      ",
@@ -256,5 +352,6 @@ def make_jagged_gen_function_call(func_attrs, indent="  "):
         offsets_first_dim_names=offsets_first_dim_names,
         offsets_data_names=offsets_data_names,
         batch_dim_name=batch_dim_name,
-        source_first_dim_name=source_first_dim_name,
+        total_length_name=total_length_name,
+        jagged_dynamic_bound_names=jagged_dynamic_bound_names,
     )

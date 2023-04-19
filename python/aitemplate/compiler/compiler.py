@@ -21,15 +21,25 @@ from datetime import datetime
 from typing import Dict, List, Optional, Union
 
 from aitemplate import backend, compiler
-from aitemplate.compiler.model import AITemplateAllocatorKind
+
+from aitemplate.compiler.base import (
+    DynamicProfileStrategy,
+    IntImm,
+    JaggedIntVar,
+    Tensor,
+)
+
+from aitemplate.compiler.model import (
+    AIT_DEFAULT_NUM_RUNTIMES,
+    AITemplateAllocatorKind,
+    Model,
+    TorchTensor,
+)
+from aitemplate.compiler.transform.name_graph import reset_name_counters
 from aitemplate.compiler.transform.profile import elapsed_dt_sec
 from aitemplate.utils import graph_utils
 from aitemplate.utils.debug_settings import AITDebugSettings
 from aitemplate.utils.serialization.serdes_code import dump_program
-
-from .base import DynamicProfileStrategy, Tensor
-
-from .model import AIT_DEFAULT_NUM_RUNTIMES, Model, TorchTensor
 
 # pylint: disable=W0102
 
@@ -83,8 +93,53 @@ def _verify_outputs_still_in_graph(sorted_graph: List[Tensor], outputs: List[Ten
     for tensor, was_seen in seen.items():
         if not was_seen:
             raise ValueError(
-                f"Output {tensor} was not found in the graph after opitmizations."
+                f"Output {tensor} was not found in the graph after optimizations."
             )
+
+
+def _mark_isolated_int_vars(sorted_graph: List[Tensor]):
+    """
+    Mark the IntVars that are not present in any input's shape
+    with the _attrs["isolated"] = True flag. The purpose is to
+    be able to distinguish these dynamic dims in the codegen
+    of some of the functions which should set them instead of
+    relying on / validating the pre-set value. To this end,
+    this function must be invoked right before the back-end
+    code generation of the ops.
+
+    One example is the padded_dense_to_jagged op that must set
+    the total_length dimension of the resulting jagged Tensor
+    if it hasn't been set from any of the model input's shape.
+    Another example is the make_jagged op that should set the
+    batch_dim within the JaggedIntVar of the resulting jagged
+    Tensor, unless it has been set already from the inputs.
+    """
+    int_vars = {}
+    int_var_names_in_input_shapes = set()
+    for tensor in sorted_graph:
+        for dim in tensor._attrs["shape"]:
+            if not isinstance(dim, IntImm):
+                name = dim._attrs["name"]
+                int_vars[name] = dim
+                if isinstance(dim, JaggedIntVar):
+                    batch_dim = dim.batch_dim()
+                    if not isinstance(batch_dim, IntImm):
+                        int_vars[batch_dim._attrs["name"]] = batch_dim
+                    total_length = dim.total_length()
+                    int_vars[total_length._attrs["name"]] = total_length
+                    for jagged_dim in dim.jagged_dims():
+                        min_value = jagged_dim.min_value()
+                        if not isinstance(min_value, IntImm):
+                            int_vars[min_value._attrs["name"]] = min_value
+                        max_value = jagged_dim.max_value()
+                        if not isinstance(max_value, IntImm):
+                            int_vars[max_value._attrs["name"]] = max_value
+                if tensor._attrs["is_input"]:
+                    int_var_names_in_input_shapes.add(name)
+
+    for name, dim in int_vars.items():
+        if name not in int_var_names_in_input_shapes:
+            dim._attrs["isolated"] = True
 
 
 _DEBUG_SETTINGS = AITDebugSettings()
@@ -103,6 +158,7 @@ def compile_model(
     constants: Optional[Dict[str, TorchTensor]] = None,
     allocator_kind: Optional[AITemplateAllocatorKind] = None,
     debug_settings: AITDebugSettings = _DEBUG_SETTINGS,
+    do_optimize_graph: bool = True,
 ) -> Model:
     """Compiles a model and generates a .so file.
 
@@ -127,11 +183,18 @@ def compile_model(
     num_runtimes: int
         How many runtimes should be stored in the internal pool. This
         determines how many inferences can happen concurrently. By
-        default, set to 2. Must be positive.
+        default, set to 1. Must be positive.
+    profile_dir: str
+        The base dir to generate profiling source codes. By default, workdir/test_name
+    constants: Dict[str, TorchTensor], optional
+        User-provided constants to bind to the graph. The constants can be folded and packaged into
+        the final *.so.
     allocator_kind: AITemplateAllocatorKind, optional
         The GPU allocator to use. If none is specified, use the default allocator.
     debug_settings: AITDebugSettings
         specify debug settings such as where to dump AITemplate model Python file, etc.
+    do_optimize_graph: bool
+        Apply full list of graph optimizations. Default: True
 
     Returns
     -------
@@ -149,7 +212,8 @@ def compile_model(
     # arguments (even if we put quotes around it)!!
     test_name = test_name.replace(",", "_")
     test_dir = os.path.join(workdir, test_name)
-    profile_dir = workdir if profile_dir is None else profile_dir
+    if profile_dir is None:
+        profile_dir = workdir
 
     if debug_settings.dump_ait_to_py:
         dump_program(tensor, debug_settings.dump_ait_to_py)
@@ -157,6 +221,7 @@ def compile_model(
     if int(recompile) == 1:
         os.makedirs(test_dir, exist_ok=True)
         with target:
+            reset_name_counters()
             graph = compiler.transform.toposort(tensor)
             graph_utils.dump_graph_debug_str_to_file(graph, test_dir, "toposort")
 
@@ -177,13 +242,20 @@ def compile_model(
             compiler.transform.name_graph(graph)
             graph_utils.dump_graph_debug_str_to_file(graph, test_dir, "name_graph")
 
+            compiler.transform.dedup_symbolic_name(graph)
+            graph_utils.dump_graph_debug_str_to_file(
+                graph, test_dir, "dedup_symbolic_name"
+            )
+
             compiler.transform.mark_param_tensor(graph)
             graph_utils.dump_graph_debug_str_to_file(
                 graph, test_dir, "mark_param_tensor"
             )
 
             start_t = datetime.now()
-            graph = compiler.transform.optimize_graph(graph, test_dir)
+            graph = compiler.transform.optimize_graph(
+                graph, test_dir, optimize=do_optimize_graph
+            )
             graph_utils.dump_graph_debug_str_to_file(graph, test_dir, "optimize_graph")
             _LOGGER.info(f"optimized graph elapsed time: {elapsed_dt_sec(start_t)}")
 
@@ -221,6 +293,7 @@ def compile_model(
                 workspace,
             ) = compiler.transform.memory_planning(graph)
             _verify_outputs_still_in_graph(graph, output_tensors)
+            _mark_isolated_int_vars(graph)
             graph_utils.dump_graph_debug_str_to_file(graph, test_dir, "memory_planning")
 
             file_pairs = backend.codegen.gen_function_src(graph, workdir, test_name)

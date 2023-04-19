@@ -23,14 +23,14 @@ from typing import List, Optional, Tuple
 
 import numpy
 
-from ...compiler import ops
-from ...compiler.ops.common.epilogue import FuncEnum
-from .. import Tensor
-from .conv3d import Conv3d
-from .dropout import Dropout, DropPath
-from .identity import Identity
-from .linear import Linear
-from .module import Module
+from aitemplate.compiler import ops
+from aitemplate.compiler.ops.common.epilogue import FuncEnum
+from aitemplate.frontend import Tensor
+from aitemplate.frontend.nn.conv3d import Conv3d
+from aitemplate.frontend.nn.dropout import Dropout, DropPath
+from aitemplate.frontend.nn.identity import Identity
+from aitemplate.frontend.nn.linear import Linear
+from aitemplate.frontend.nn.module import Module
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -208,7 +208,6 @@ class _AttentionPool(Module):
         tensor = ops.reshape()(tensor, [B, N, L_pooled, C])
 
         if self.has_norm and not self.norm_before_pool:
-
             # TODO: add support for norm before pool
             # tensor = self.norm(tensor)
             _LOGGER.warning("Unsupport norm before pool")
@@ -347,7 +346,6 @@ class MultiScaleAttention(Module):
         ## TODO: add pool mode support for {"max", "avg"}
 
         elif pool_mode == "conv":
-
             self.pool_q = (
                 Conv3d(
                     head_dim,
@@ -513,7 +511,6 @@ class MultiScaleAttention(Module):
             q, k, v = self._reshape_qkv_to_seq(q, k, v, q_N, v_N, k_N, B, C)
             q, k, v = self._qkv_proj(q, q_N, k, k_N, v, v_N, B, C)
         else:
-
             if self.separate_qkv:
                 q = k = v = x
                 pass
@@ -684,13 +681,15 @@ class MultiScaleBlock(Module):
             self.pool_skip, has_cls_embed=self.has_cls_embed, norm=None
         )
 
-    def forward(self, x: Tensor, thw_shape: List[int]) -> Tuple[Tensor, List[int]]:
+    def forward(
+        self, x: Tensor, t_shape: int, h_shape: int, w_shape: int
+    ) -> Tuple[Tensor, List[int]]:
         """
         Args:
             x (Tensor): Input tensor.
             thw_shape (List): The shape of the input tensor (before flattening).
         """
-
+        thw_shape = [t_shape, h_shape, w_shape]
         x_block, thw_shape_new = self.attn(x, thw_shape)
 
         x_res, _ = self._attention_pool(x, thw_shape)

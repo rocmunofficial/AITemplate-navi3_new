@@ -20,11 +20,12 @@ import logging
 
 from typing import List
 
-from ...utils import graph_utils
-from .. import ops
-from ..base import Operator, Tensor
+from aitemplate.compiler import ops
+from aitemplate.compiler.base import Operator, Tensor
 
-from . import toposort, transform_utils
+from aitemplate.compiler.transform import toposort, transform_utils
+
+from aitemplate.utils import graph_utils
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -100,7 +101,7 @@ def split_large_split_ops(sorted_graph: List[Tensor], _: str) -> List[Tensor]:
             sorted_graph += list(new_outputs)
             output_mapping += list(zip(outputs[start:end], new_outputs))
 
-        for (old_output, new_output) in output_mapping:
+        for old_output, new_output in output_mapping:
             transform_utils.replace_tensor(old_output, new_output)
 
     if not modified:

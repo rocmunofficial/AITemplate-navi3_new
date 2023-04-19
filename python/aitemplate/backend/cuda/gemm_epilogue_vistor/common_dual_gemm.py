@@ -25,12 +25,12 @@ from typing import Any, Dict
 
 import jinja2
 
-from ....utils import alignment
+from aitemplate.backend.backend_spec import CUDASpec
+from aitemplate.backend.common import gemm_common
+from aitemplate.backend.cuda.gemm_universal import common
+from aitemplate.backend.target import Target
 
-from ...backend_spec import CUDASpec
-from ...common import gemm_common
-from ...target import Target
-from ..gemm_universal import common
+from aitemplate.utils import alignment
 
 
 # pylint: disable=C0301,C0415,R1705
@@ -94,13 +94,13 @@ EXEC_TEMPLATE = jinja2.Template(
 //{{indent}}using ElementComputeEpilogue = typename {{instance}}::ElementAccumulator;
 {{indent}}using ElementCompute = typename {{instance}}::DualGemmKernel::Epilogue0::OutputOp::ElementCompute;
 
+{{indent}}using coord_t = cutlass::gemm::GemmCoord::Index;
 {{indent}}typename {{instance}}::Arguments arguments{
 
 {{problem_args}}
 
 {{indent}}};
 {% if is_profiler %}
-{{indent}}// https://youtu.be/-Rp7UPbhErE
 {{indent}}size_t workspace_size = gemm_op.get_workspace_size(arguments);
 {{indent}}cutlass::device_memory::allocation<uint8_t> local_workspace(workspace_size);
 
@@ -182,8 +182,8 @@ def default_fproc(
     a_layout,
     b_layout,
     c_layout,
-    epiligue_name,
-    epiligue2_name,
+    epilogue_name,
+    epilogue2_name,
     permute_layout=None,
     dtype="float16",
 ):
@@ -228,8 +228,8 @@ def default_fproc(
         # set output major
         op.C.layout = c_layout
         # set epilogue
-        op.epilogue_functor = cutlass_lib.library.EpilogueFunctorName[epiligue_name]
-        op.epilogue_functor2 = cutlass_lib.library.EpilogueFunctorName[epiligue2_name]
+        op.epilogue_functor = cutlass_lib.library.EpilogueFunctorName[epilogue_name]
+        op.epilogue_functor2 = cutlass_lib.library.EpilogueFunctorName[epilogue2_name]
         op.element_epilogue = acc_type
         if permute_layout is not None:
             op.permute_layout = cutlass_lib.library.EpiloguePermuteLayoutName[
@@ -261,8 +261,8 @@ def make_fproc(
             a_layout=a_layout,
             b_layout=b_layout,
             c_layout=c_layout,
-            epiligue_name=func_attrs["epilogue"],
-            epiligue2_name=func_attrs["epilogue2"],
+            epilogue_name=func_attrs["epilogue"],
+            epilogue2_name=func_attrs["epilogue2"],
             dtype=dtype,
         )
 
@@ -435,11 +435,6 @@ def gen_profiler(
             gemm_op=gemm_op,
             gemm_op_name=op_name,
             func_name=f"benchmark_{function_name}",
-            a_ptr="memory_pool->RequestTensorByIdx(0)",
-            b_ptr="memory_pool->RequestTensorByIdx(1)",
-            has_bias=has_bias,
-            bias_ptr=bias_ptr_arg,
-            c_ptr="memory_pool->RequestTensorByIdx(2)",
             support_split_k=support_split_k,
             split_k="split_k",
             adims=adims,
@@ -468,11 +463,11 @@ def gen_profiler(
     func_call = common.FUNC_CALL_TEMPLATE.render(
         is_profiler=True,
         func_name=function_name,
-        a_ptr="a_ptr",
-        b_ptr="b_ptr",
+        a_ptr="memory_pool->RequestTensorByIdx(0)",
+        b_ptr="memory_pool->RequestTensorByIdx(1)",
         has_bias=has_bias,
-        bias_ptr="bias_ptr",
-        c_ptr="c_ptr",
+        bias_ptr=bias_ptr_arg,
+        c_ptr="memory_pool->RequestTensorByIdx(2)",
         split_k="split_k",
         adims=benchmark_adims,
         bdims=benchmark_bdims,

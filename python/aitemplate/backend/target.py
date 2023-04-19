@@ -21,10 +21,11 @@ import pathlib
 import shutil
 import tempfile
 from enum import IntEnum
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
-from . import registry
-from .profiler_cache import ProfileCacheDB
+from aitemplate.backend import registry
+from aitemplate.backend.profiler_cache import ProfileCacheDB
+from aitemplate.utils.misc import is_linux
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -49,7 +50,7 @@ class TargetType(IntEnum):
     rocm = 2
 
 
-class Target(object):
+class Target:
     def __init__(self, static_files_path: str):
         """
         Parameters
@@ -189,7 +190,15 @@ class Target(object):
         A command that turns a raw binary file into an object file that
         can be linked into the executable.
         """
-        return "ld -r -b binary -o {target} {src}"
+        cmd = "ld -r -b binary -o {target} {src}"
+        # Support models with >2GB constants on Linux only
+        if is_linux():
+            cmd += (
+                " && objcopy --rename-section"
+                " .data=.lrodata,alloc,load,readonly,data,contents"
+                " {target} {target}"
+            )
+        return cmd
 
     def compile_options(self) -> str:
         """Options for compiling the target.
@@ -257,13 +266,13 @@ class Target(object):
         """
         return os.environ.get("TRICK_CI_ENV", None) == "1"
 
-    def in_ci_env(self) -> Union[None, str]:
+    def in_ci_env(self) -> bool:
         """Check if the current environment is CI.
 
         Returns
         -------
-        Union[None, str]
-            CI environment name if in CI environment, otherwise None.
+        bool
+            Returns True if env CI_FLAG=CIRCLECI and TRICK_CI_ENV is not set (or 0).
         """
         return os.environ.get("CI_FLAG", None) == "CIRCLECI" and not self.trick_ci_env()
 
@@ -285,7 +294,7 @@ class Target(object):
     def force_profile(self) -> bool:
         """Whether to force profile.
 
-        Force profiling regarless in_ci_env, disable_profiler_codegen
+        Force profiling regardless in_ci_env, disable_profiler_codegen
 
         Returns
         -------
@@ -380,20 +389,22 @@ class Target(object):
             return self._profile_cache.conv3d_cache_version
         raise NotImplementedError
 
-    def query_profile_cache(self, op_class: str, args: str) -> Tuple[str]:
+    def query_profile_cache(
+        self, op_class: str, args: Dict[str, Any]
+    ) -> Tuple[str, int]:
         """Query the profile cache for the given op class and args.
 
         Parameters
         ----------
         op_class : str
             Op class name. gemm, conv or normalization
-        args : str
+        args : Dict[str, Any]
             Op arguments.
 
         Returns
         -------
-        Tuple[str]
-            Queried best profile results.
+        Tuple[str, int]
+            Queried best profiling results.
 
         Raises
         ------
@@ -410,7 +421,7 @@ class Target(object):
             return self._profile_cache.query_normalization(args)
         raise NotImplementedError
 
-    def insert_profile_cache(self, op_class: str, args: str):
+    def insert_profile_cache(self, op_class: str, args: Dict[str, Any]):
         """Insert the profile cache for the given op class and args."""
         if op_class == "gemm":
             self._profile_cache.insert_gemm(args)

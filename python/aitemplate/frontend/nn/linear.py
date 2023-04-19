@@ -15,11 +15,10 @@
 """
 Linear module.
 """
+from aitemplate.compiler import ops
+from aitemplate.frontend.nn.module import Module
+from aitemplate.frontend.nn.parameter import Parameter
 from aitemplate.testing import detect_target
-
-from ...compiler import ops
-from .module import Module
-from .parameter import Parameter
 
 
 class Linear(Module):
@@ -89,19 +88,12 @@ class Linear(Module):
     def forward(self, *args):
         assert len(args) >= 1
         x = args[0]
-        if not self.USE_CUDA:
-            shape = x._attrs["shape"]
-            x = x if len(shape) == 2 else ops.reshape()(x, [-1, self.in_channels])
+        if not self.USE_CUDA and len(x._attrs["shape"]) != 2:
+            x = ops.reshape()(x, [-1, self.in_channels])
+        inputs = [x, self.weight.tensor()]
+        if self.use_bias:
+            inputs.append(self.bias.tensor())
         if len(args) == 2:
-            if self.use_bias:
-                inputs = [x, self.weight.tensor(), self.bias.tensor(), args[1]]
-            else:
-                inputs = [x, self.weight.tensor(), args[1]]
-            output = self.op(*inputs)
-            return output
-        output = (
-            self.op(x, self.weight.tensor(), bias=self.bias.tensor())
-            if self.use_bias
-            else self.op(x, self.weight.tensor())
-        )
+            inputs.append(args[1])
+        output = self.op(*inputs)
         return output

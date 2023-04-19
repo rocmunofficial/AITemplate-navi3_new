@@ -16,8 +16,8 @@
 Codegen functions for perm021fc_crc, which computes
 [b, n, m](col) = bmm([1, k, n](col), [b, k, m](row)).
 """
-from ... import registry
-from . import bmm_common, common
+from aitemplate.backend import registry
+from aitemplate.backend.cuda.gemm_universal import bmm_common, common
 
 # pylint: disable=C0103,C0415,W0613,C0301,R1705,R1703
 
@@ -53,7 +53,7 @@ def gemm_crc_config(func_attrs, dtype="float16"):
             b_layout=cutlass_lib.library.LayoutType.RowMajor,
             c_layout=cutlass_lib.library.LayoutType.ColumnMajor,
             dtype=func_attrs["inputs"][0].dtype(),
-            epiligue_name=func_attrs["epilogue"],
+            epilogue_name=func_attrs["epilogue"],
         )
 
     func_attrs["op_instance"] = common.extract_config(fproc)
