@@ -112,9 +112,9 @@ EXTRA_HEADER_TEMPLATE = jinja2.Template(
         {% endif %}
     {% elif gemm_flag in ["bias_permute_m2n3", "bias_permute_m3n2"]  %}
         {% if rocm_device_name == "gfx1100" %}
-#include "ck/tensor_operation/gpu/device/impl/device_batched_contraction_multiple_d_xdl_cshuffle.hpp"
-        {% else %}
 #include "ck/tensor_operation/gpu/device/impl/device_batched_contraction_multiple_d_wmma_cshuffle.hpp"
+        {% else %}
+#include "ck/tensor_operation/gpu/device/impl/device_batched_contraction_multiple_d_xdl_cshuffle.hpp"
         {% endif %}
     {% endif %}
 {% endif %}

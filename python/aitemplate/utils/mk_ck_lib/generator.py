@@ -43,16 +43,16 @@ def CreateConv2dFwdOperator(manifest, operation_kind, out_element_op, out_data_o
 
     if Target.current().get_device_name() == "gfx1100":
         tile_descriptions = [
-            conv.GroupTileDesc(1, 256, 256, 64, 8, 8, 0, 16, 16, 8, 1),
-            conv.GroupTileDesc(1, 256, 64, 256, 8, 8, 0, 16, 16, 2, 4),
-            conv.GroupTileDesc(1, 256, 256,128, 4, 8, 0, 16, 16, 8, 2),
-            conv.GroupTileDesc(1, 256, 256,128, 8, 8, 0, 16, 16, 8, 2),
-            conv.GroupTileDesc(1, 256, 128,256, 4, 8, 0, 16, 16, 4, 4),
-            conv.GroupTileDesc(1, 256, 128,128, 8, 8, 0, 16, 16, 4, 2),
-            conv.GroupTileDesc(1, 128, 128, 64, 8, 8, 0, 16, 16, 4, 2),
-            conv.GroupTileDesc(1, 128, 64, 128, 8, 8, 0, 16, 16, 2, 4),
-            conv.GroupTileDesc(1,  64, 64,  64, 8, 8, 0, 16, 16, 4, 2),
-            conv.GroupTileDesc(1,  64, 128, 32, 8, 8, 0, 16, 16, 8, 2),
+            conv.GroupTileDesc(1, 256, 256, 64, 64, 8, 0, 16, 16, 8, 1),
+            conv.GroupTileDesc(1, 256, 64, 256, 64, 8, 0, 16, 16, 2, 4),
+            conv.GroupTileDesc(1, 256, 256,128, 32, 8, 0, 16, 16, 8, 2),
+            conv.GroupTileDesc(1, 256, 256,128, 64, 8, 0, 16, 16, 8, 2),
+            conv.GroupTileDesc(1, 256, 128,256, 32, 8, 0, 16, 16, 4, 4),
+            conv.GroupTileDesc(1, 256, 128,128, 64, 8, 0, 16, 16, 4, 2),
+            conv.GroupTileDesc(1, 128, 128, 64, 64, 8, 0, 16, 16, 4, 2),
+            conv.GroupTileDesc(1, 128, 64, 128, 64, 8, 0, 16, 16, 2, 4),
+            conv.GroupTileDesc(1,  64, 64,  64, 64, 8, 0, 16, 16, 4, 2),
+            conv.GroupTileDesc(1,  64, 128, 32, 64, 8, 0, 16, 16, 8, 2),
         ]
         c_block_descriptions = [
             conv.CBlockTransferDesc(1, 1, [1, 32, 1, 8], 8),
@@ -144,7 +144,7 @@ def CreateConv2dFwdOperator(manifest, operation_kind, out_element_op, out_data_o
                 manifest.append(new_operation)
                 operations.append(new_operation)
 
-    # conv2d_specialization = [conv.Conv2DSpecialization.ConvFwdOddC]
+    conv2d_specialization = [conv.Conv2DSpecialization.ConvFwdOddC]
 
     # if Target.current().get_device_name() == "gfx1100":
     #     tile_descriptions += []
@@ -158,26 +158,26 @@ def CreateConv2dFwdOperator(manifest, operation_kind, out_element_op, out_data_o
     #         conv.GroupTileDesc(1, 256, 256, 16, 32, 8, 8, 16, 16, 4, 1),  # c_out=1
     #     ]
 
-    # block_descriptions = [
-    #     conv.BlockTransferDesc([4, 8, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
-    #     conv.BlockTransferDesc([4, 8, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
-    #     conv.BlockTransferDesc([4, 4, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
-    #     conv.BlockTransferDesc([4, 8, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
-    #     conv.BlockTransferDesc([4, 4, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
-    #     conv.BlockTransferDesc([4, 4, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
-    #     conv.BlockTransferDesc([4, 2, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
-    #     conv.BlockTransferDesc([4, 8, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
-    #     conv.BlockTransferDesc([4, 8, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
-    #     conv.BlockTransferDesc([4, 4, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
-    #     conv.BlockTransferDesc([4, 2, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
-    #     conv.BlockTransferDesc([4, 2, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
-    #     conv.BlockTransferDesc([2, 32, 4], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
-    #     conv.BlockTransferDesc([2, 32, 4], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
-    #     conv.BlockTransferDesc([2, 32, 4], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
-    #     conv.BlockTransferDesc([2, 16, 4], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
-    #     conv.BlockTransferDesc([2, 16, 4], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
-    #     conv.BlockTransferDesc([4, 16, 4], [1, 0, 2], [1, 0, 2], 2, 2, 2, 1),  # c_out=1
-    # ]
+    block_descriptions = [
+        conv.BlockTransferDesc([4, 8, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
+        conv.BlockTransferDesc([4, 8, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
+        conv.BlockTransferDesc([4, 4, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
+        conv.BlockTransferDesc([4, 8, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
+        conv.BlockTransferDesc([4, 4, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
+        conv.BlockTransferDesc([4, 4, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
+        conv.BlockTransferDesc([4, 2, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
+        conv.BlockTransferDesc([4, 8, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
+        conv.BlockTransferDesc([4, 8, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
+        conv.BlockTransferDesc([4, 4, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
+        conv.BlockTransferDesc([4, 2, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
+        conv.BlockTransferDesc([4, 2, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
+        conv.BlockTransferDesc([2, 32, 4], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
+        conv.BlockTransferDesc([2, 32, 4], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
+        conv.BlockTransferDesc([2, 32, 4], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
+        conv.BlockTransferDesc([2, 16, 4], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
+        conv.BlockTransferDesc([2, 16, 4], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
+        conv.BlockTransferDesc([4, 16, 4], [1, 0, 2], [1, 0, 2], 2, 2, 2, 1),  # c_out=1
+    ]
 
     # c_block_descriptions += [
     #     conv.CBlockTransferDesc(1, 1, [1, 32, 1, 8], 8),
@@ -187,31 +187,31 @@ def CreateConv2dFwdOperator(manifest, operation_kind, out_element_op, out_data_o
     #     conv.CBlockTransferDesc(1, 1, [1, 16, 1, 4], 8),
     #     conv.CBlockTransferDesc(4, 1, [1, 256, 1, 1], 1),  # c_out=1
     # ]
-    # for conv2d_spec in conv2d_specialization:
-    #     for gemm_spec in gemm_specialization:
-    #         for tile_desc, block_desc, c_block_desc in zip(
-    #             tile_descriptions, block_descriptions, c_block_descriptions
-    #         ):
-    #             new_operation = conv.Conv2DOperation(
-    #                 operation_kind=operation_kind,
-    #                 extra_kind=out_element_op,
-    #                 op_type=conv.OpType(operation_kind.value),
-    #                 A=a_element_desc,
-    #                 B=b_element_desc,
-    #                 C=c_element_desc,
-    #                 a_elem_op=in_element_op,
-    #                 b_elem_op=in_element_op,
-    #                 epilogue_functor=out_element_op,
-    #                 c_data_op=out_data_op,
-    #                 conv2d_specialization=conv2d_spec,
-    #                 gemm_specialization=gemm_spec,
-    #                 tile_desc=tile_desc,
-    #                 a_block_transfer=block_desc,
-    #                 b_block_transfer=block_desc,
-    #                 c_block_transfer=c_block_desc,
-    #             )
-    #             manifest.append(new_operation)
-    #             operations.append(new_operation)
+    for conv2d_spec in conv2d_specialization:
+        for gemm_spec in gemm_specialization:
+            for tile_desc, block_desc, c_block_desc in zip(
+                tile_descriptions, block_descriptions, c_block_descriptions
+            ):
+                new_operation = conv.Conv2DOperation(
+                    operation_kind=operation_kind,
+                    extra_kind=out_element_op,
+                    op_type=conv.OpType(operation_kind.value),
+                    A=a_element_desc,
+                    B=b_element_desc,
+                    C=c_element_desc,
+                    a_elem_op=in_element_op,
+                    b_elem_op=in_element_op,
+                    epilogue_functor=out_element_op,
+                    c_data_op=out_data_op,
+                    conv2d_specialization=conv2d_spec,
+                    gemm_specialization=gemm_spec,
+                    tile_desc=tile_desc,
+                    a_block_transfer=block_desc,
+                    b_block_transfer=block_desc,
+                    c_block_transfer=c_block_desc,
+                )
+                manifest.append(new_operation)
+                operations.append(new_operation)
     return operations
 
 
@@ -441,17 +441,17 @@ def CreateGemmRRROperator(manifest):
 
     if Target.current().get_device_name() == "gfx1100":
         tile_descriptions = [
-            gemm.TileDesc(256, 128, 256, 8, 8, 0, 16, 16, 4, 4),
-            gemm.TileDesc(256, 256, 128, 8, 8, 0, 16, 16, 8, 2),
-            gemm.TileDesc(256, 128, 256, 4, 8, 0, 16, 16, 4, 4),
-            gemm.TileDesc(256, 256, 128, 4, 8, 0, 16, 16, 8, 2),
-            gemm.TileDesc(256, 128, 128, 8, 8, 0, 16, 16, 4, 2),
-            gemm.TileDesc(256, 128, 128, 4, 8, 0, 16, 16, 4, 2),
-            gemm.TileDesc(256, 256, 64, 8, 8, 0, 16, 16, 8, 1),
-            gemm.TileDesc(256, 64, 256, 8, 8, 0, 16, 16, 2, 4),
-            gemm.TileDesc(128, 128, 128, 8, 8, 0, 16, 16, 8, 2),
-            gemm.TileDesc(128, 128, 64, 8, 8, 0, 16, 16, 4, 2),
-            gemm.TileDesc(128, 64, 128, 8, 8, 0, 16, 16, 4, 2),
+            gemm.TileDesc(256, 128, 256, 64, 8, 0, 16, 16, 4, 4),
+            gemm.TileDesc(256, 256, 128, 64, 8, 0, 16, 16, 8, 2),
+            gemm.TileDesc(256, 128, 256, 32, 8, 0, 16, 16, 4, 4),
+            gemm.TileDesc(256, 256, 128, 32, 8, 0, 16, 16, 8, 2),
+            gemm.TileDesc(256, 128, 128, 64, 8, 0, 16, 16, 4, 2),
+            gemm.TileDesc(256, 128, 128, 32, 8, 0, 16, 16, 4, 2),
+            gemm.TileDesc(256, 256, 64, 64, 8, 0, 16, 16, 8, 1),
+            gemm.TileDesc(256, 64, 256, 64, 8, 0, 16, 16, 2, 4),
+            gemm.TileDesc(128, 128, 128, 64, 8, 0, 16, 16, 8, 2),
+            gemm.TileDesc(128, 128, 64, 64, 8, 0, 16, 16, 4, 2),
+            gemm.TileDesc(128, 64, 128, 64, 8, 0, 16, 16, 4, 2),
         ]
     else:
         tile_descriptions = [
@@ -571,17 +571,17 @@ def CreateGemmRCROperator(manifest):
 
     if Target.current().get_device_name() == "gfx1100":
         tile_descriptions = [
-            gemm.TileDesc(256, 128, 256, 8, 8, 0, 16, 16, 4, 4),
-            gemm.TileDesc(256, 256, 128, 8, 8, 0, 16, 16, 8, 2),
-            gemm.TileDesc(256, 128, 256, 4, 8, 0, 16, 16, 4, 4),
-            gemm.TileDesc(256, 256, 128, 4, 8, 0, 16, 16, 8, 2),
-            gemm.TileDesc(256, 128, 128, 8, 8, 0, 16, 16, 4, 2),
-            gemm.TileDesc(256, 128, 128, 4, 8, 0, 16, 16, 4, 2),
-            gemm.TileDesc(256, 256,  64, 8, 8, 0, 16, 16, 8, 1),
-            gemm.TileDesc(256, 64, 256, 8, 8, 0, 16, 16, 2, 4),
-            gemm.TileDesc(128, 128, 128, 8, 8, 0, 16, 16, 8, 2),
-            gemm.TileDesc(128, 128,  64, 8, 8, 0, 16, 16, 4, 2),
-            gemm.TileDesc(128,  64, 128, 8, 8, 0, 16, 16, 4, 2),
+            gemm.TileDesc(256, 128, 256, 64, 8, 0, 16, 16, 4, 4),
+            gemm.TileDesc(256, 256, 128, 64, 8, 0, 16, 16, 8, 2),
+            gemm.TileDesc(256, 128, 256, 32, 8, 0, 16, 16, 4, 4),
+            gemm.TileDesc(256, 256, 128, 32, 8, 0, 16, 16, 8, 2),
+            gemm.TileDesc(256, 128, 128, 64, 8, 0, 16, 16, 4, 2),
+            gemm.TileDesc(256, 128, 128, 32, 8, 0, 16, 16, 4, 2),
+            gemm.TileDesc(256, 256,  64, 64, 8, 0, 16, 16, 8, 1),
+            gemm.TileDesc(256, 64, 256, 64, 8, 0, 16, 16, 2, 4),
+            gemm.TileDesc(128, 128, 128, 64, 8, 0, 16, 16, 8, 2), # failed
+            gemm.TileDesc(128, 128,  64, 64, 8, 0, 16, 16, 4, 2),
+            gemm.TileDesc(128,  64, 128, 64, 8, 0, 16, 16, 4, 2),
         ]
     else: 
         tile_descriptions = [
@@ -704,7 +704,15 @@ def CreateGemmRCRBillinearOperator(manifest, c_element_op):
     # 0 indicates not print
     if Target.current().get_device_name() == "gfx1100":
         tile_descriptions = [
-            gemm.TileDesc(256, 128, 256, 8, 8, 0, 16, 16, 4, 4),
+            gemm.TileDesc(256, 128, 256, 64, 8, 0, 16, 16, 4, 4),
+            gemm.TileDesc(256, 256, 128, 32, 8, 0, 16, 16, 8, 2),
+            gemm.TileDesc(256, 128, 128, 64, 8, 0, 16, 16, 4, 2),
+            gemm.TileDesc(256, 128, 128, 32, 8, 0, 16, 16, 4, 2),
+            gemm.TileDesc(128, 128, 128, 32, 8, 0, 16, 16, 8, 2),
+            gemm.TileDesc(128, 256, 64, 64, 8, 0, 16, 16, 8, 2),
+            gemm.TileDesc(128, 64, 256, 64, 8, 0, 16, 16, 2, 8),
+            gemm.TileDesc(64, 64, 32, 64, 8, 0, 16, 16, 4, 1),
+            gemm.TileDesc(64, 32, 64, 64, 8, 0, 16, 16, 2, 2),
         ]
     else:
         tile_descriptions = [
@@ -1158,21 +1166,36 @@ def CreateGemmRCRm2n3PermOperator(manifest, c_element_op):
     e_dtype = library.DataType.f16
     element_op = library.TensorOperation.PassThrough
     # 0 indicates not print
-    tile_descriptions = [
-        gemm.TileDesc(256, 256, 128, 32, 8, 8, 32, 32, 4, 2),
-        gemm.TileDesc(256, 128, 256, 32, 8, 8, 32, 32, 2, 4),
-        gemm.TileDesc(128, 128, 128, 32, 8, 8, 32, 32, 4, 2),
-        gemm.TileDesc(256, 128, 128, 32, 8, 8, 32, 32, 2, 2),
-        # gemm.TileDesc(128, 128, 64, 32, 8, 8, 32, 32, 2, 2),
-        gemm.TileDesc(128, 64, 128, 32, 8, 8, 32, 32, 2, 2),
-        gemm.TileDesc(64, 64, 64, 32, 8, 8, 32, 32, 2, 2),
-        gemm.TileDesc(256, 128, 64, 32, 8, 8, 32, 32, 2, 1),
-        gemm.TileDesc(256, 64, 128, 32, 8, 8, 32, 32, 1, 2),
-        gemm.TileDesc(128, 128, 32, 32, 8, 8, 32, 32, 2, 1),
-        gemm.TileDesc(128, 32, 128, 32, 8, 8, 32, 32, 1, 2),
-        gemm.TileDesc(64, 64, 32, 32, 8, 8, 32, 32, 2, 1),
-        gemm.TileDesc(64, 32, 64, 32, 8, 8, 32, 32, 1, 2),
-    ]
+    if Target.current().get_device_name() == "gfx1100":
+        tile_descriptions = [
+            gemm.TileDesc(256, 128, 256, 64, 8, 0, 16, 16, 4, 4),
+            gemm.TileDesc(256, 256, 128, 64, 8, 0, 16, 16, 8, 2),
+            gemm.TileDesc(256, 128, 256, 32, 8, 0, 16, 16, 4, 4),
+            gemm.TileDesc(256, 256, 128, 32, 8, 0, 16, 16, 8, 2),
+            gemm.TileDesc(256, 128, 128, 64, 8, 0, 16, 16, 4, 2),
+            gemm.TileDesc(256, 128, 128, 32, 8, 0, 16, 16, 4, 2),
+            gemm.TileDesc(256, 256,  64, 64, 8, 0, 16, 16, 8, 1),
+            gemm.TileDesc(256, 64, 256, 64, 8, 0, 16, 16, 2, 4),
+            gemm.TileDesc(128, 128, 128, 64, 8, 0, 16, 16, 8, 2),
+            gemm.TileDesc(128, 128,  64, 64, 8, 0, 16, 16, 4, 2),
+            gemm.TileDesc(128,  64, 128, 64, 8, 0, 16, 16, 4, 2),
+        ]
+    else:
+        tile_descriptions = [
+            gemm.TileDesc(256, 256, 128, 32, 8, 8, 32, 32, 4, 2),
+            gemm.TileDesc(256, 128, 256, 32, 8, 8, 32, 32, 2, 4),
+            gemm.TileDesc(128, 128, 128, 32, 8, 8, 32, 32, 4, 2),
+            gemm.TileDesc(256, 128, 128, 32, 8, 8, 32, 32, 2, 2),
+            # gemm.TileDesc(128, 128, 64, 32, 8, 8, 32, 32, 2, 2),
+            gemm.TileDesc(128, 64, 128, 32, 8, 8, 32, 32, 2, 2),
+            gemm.TileDesc(64, 64, 64, 32, 8, 8, 32, 32, 2, 2),
+            gemm.TileDesc(256, 128, 64, 32, 8, 8, 32, 32, 2, 1),
+            gemm.TileDesc(256, 64, 128, 32, 8, 8, 32, 32, 1, 2),
+            gemm.TileDesc(128, 128, 32, 32, 8, 8, 32, 32, 2, 1),
+            gemm.TileDesc(128, 32, 128, 32, 8, 8, 32, 32, 1, 2),
+            gemm.TileDesc(64, 64, 32, 32, 8, 8, 32, 32, 2, 1),
+            gemm.TileDesc(64, 32, 64, 32, 8, 8, 32, 32, 1, 2),
+        ]
 
     block_descriptions = []
     c_block_descriptions = []
@@ -1256,21 +1279,36 @@ def CreateGemmRCRm3n2PermOperator(manifest, c_element_op):
     e_dtype = library.DataType.f16
     element_op = library.TensorOperation.PassThrough
     # 0 indicates not print
-    tile_descriptions = [
-        gemm.TileDesc(256, 256, 128, 32, 8, 8, 32, 32, 4, 2),
-        gemm.TileDesc(256, 128, 256, 32, 8, 8, 32, 32, 2, 4),
-        gemm.TileDesc(128, 128, 128, 32, 8, 8, 32, 32, 4, 2),
-        gemm.TileDesc(256, 128, 128, 32, 8, 8, 32, 32, 2, 2),
-        # gemm.TileDesc(128, 128, 64, 32, 8, 8, 32, 32, 2, 2),
-        gemm.TileDesc(128, 64, 128, 32, 8, 8, 32, 32, 2, 2),
-        gemm.TileDesc(64, 64, 64, 32, 8, 8, 32, 32, 2, 2),
-        gemm.TileDesc(256, 128, 64, 32, 8, 8, 32, 32, 2, 1),
-        gemm.TileDesc(256, 64, 128, 32, 8, 8, 32, 32, 1, 2),
-        gemm.TileDesc(128, 128, 32, 32, 8, 8, 32, 32, 2, 1),
-        gemm.TileDesc(128, 32, 128, 32, 8, 8, 32, 32, 1, 2),
-        gemm.TileDesc(64, 64, 32, 32, 8, 8, 32, 32, 2, 1),
-        gemm.TileDesc(64, 32, 64, 32, 8, 8, 32, 32, 1, 2),
-    ]
+    if Target.current().get_device_name() == "gfx1100":
+        tile_descriptions = [
+            gemm.TileDesc(256, 128, 256, 64, 8, 0, 16, 16, 4, 4),
+            gemm.TileDesc(256, 256, 128, 64, 8, 0, 16, 16, 8, 2),
+            gemm.TileDesc(256, 128, 256, 32, 8, 0, 16, 16, 4, 4),
+            gemm.TileDesc(256, 256, 128, 32, 8, 0, 16, 16, 8, 2),
+            gemm.TileDesc(256, 128, 128, 64, 8, 0, 16, 16, 4, 2),
+            gemm.TileDesc(256, 128, 128, 32, 8, 0, 16, 16, 4, 2),
+            gemm.TileDesc(256, 256,  64, 64, 8, 0, 16, 16, 8, 1),
+            gemm.TileDesc(256, 64, 256, 64, 8, 0, 16, 16, 2, 4),
+            gemm.TileDesc(128, 128, 128, 64, 8, 0, 16, 16, 8, 2),
+            gemm.TileDesc(128, 128,  64, 64, 8, 0, 16, 16, 4, 2),
+            gemm.TileDesc(128,  64, 128, 64, 8, 0, 16, 16, 4, 2),
+        ]
+    else:
+        tile_descriptions = [
+            gemm.TileDesc(256, 256, 128, 32, 8, 8, 32, 32, 4, 2),
+            gemm.TileDesc(256, 128, 256, 32, 8, 8, 32, 32, 2, 4),
+            gemm.TileDesc(128, 128, 128, 32, 8, 8, 32, 32, 4, 2),
+            gemm.TileDesc(256, 128, 128, 32, 8, 8, 32, 32, 2, 2),
+            # gemm.TileDesc(128, 128, 64, 32, 8, 8, 32, 32, 2, 2),
+            gemm.TileDesc(128, 64, 128, 32, 8, 8, 32, 32, 2, 2),
+            gemm.TileDesc(64, 64, 64, 32, 8, 8, 32, 32, 2, 2),
+            gemm.TileDesc(256, 128, 64, 32, 8, 8, 32, 32, 2, 1),
+            gemm.TileDesc(256, 64, 128, 32, 8, 8, 32, 32, 1, 2),
+            gemm.TileDesc(128, 128, 32, 32, 8, 8, 32, 32, 2, 1),
+            gemm.TileDesc(128, 32, 128, 32, 8, 8, 32, 32, 1, 2),
+            gemm.TileDesc(64, 64, 32, 32, 8, 8, 32, 32, 2, 1),
+            gemm.TileDesc(64, 32, 64, 32, 8, 8, 32, 32, 1, 2),
+        ]
 
     block_descriptions = []
     c_block_descriptions = []

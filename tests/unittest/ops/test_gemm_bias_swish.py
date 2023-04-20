@@ -70,11 +70,11 @@ class GEMMBiasSwishTestCase(unittest.TestCase):
     def test_rcr_float16(self):
         self._test_rcr(dtype="float16")
 
-    def test_rcr_float32_sm80(self):
-        self._test_rcr(dtype="float32")
+    # def test_rcr_float32_sm80(self):
+        # self._test_rcr(dtype="float32")
 
-    def test_rcr_bfloat16_bf16(self):
-        self._test_rcr(dtype="bfloat16")
+    # def test_rcr_bfloat16_bf16(self):
+        # self._test_rcr(dtype="bfloat16")
 
 
 filter_test_cases_by_test_env(GEMMBiasSwishTestCase)

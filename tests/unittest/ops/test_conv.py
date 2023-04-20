@@ -46,7 +46,7 @@ class ConvTestCase(unittest.TestCase):
         Y_pt = torch.nn.functional.conv2d(X_pt, W_pt, padding=1)
         x = X_pt.permute((0, 2, 3, 1)).contiguous()
         w = W_pt.permute((0, 2, 3, 1)).contiguous()
-        y = torch.empty([batch, 224, 224, 256]).cuda().half()
+        y = torch.empty_like(Y_pt).permute((0, 2, 3, 1)).contiguous()
         module.run_with_tensors({"input_0": x, "input_1": w}, [y])
         y_transpose = y.permute((0, 3, 1, 2))
         if target.name() == "cuda":
