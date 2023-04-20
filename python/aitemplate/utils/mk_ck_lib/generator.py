@@ -43,16 +43,16 @@ def CreateConv2dFwdOperator(manifest, operation_kind, out_element_op, out_data_o
 
     if Target.current().get_device_name() == "gfx1100":
         tile_descriptions = [
-            # conv.GroupTileDesc(1, 256, 256, 64, 8, 8, 0, 16, 16, 8, 1),
+            conv.GroupTileDesc(1, 256, 256, 64, 8, 8, 0, 16, 16, 8, 1),
             conv.GroupTileDesc(1, 256, 64, 256, 8, 8, 0, 16, 16, 2, 4),
-            # conv.GroupTileDesc(1, 256, 256,128, 4, 8, 0, 16, 16, 8, 2),
-            # conv.GroupTileDesc(1, 256, 256,128, 8, 8, 0, 16, 16, 8, 2),
-            # conv.GroupTileDesc(1, 256, 128,256, 4, 8, 0, 16, 16, 4, 4),
-            # conv.GroupTileDesc(1, 256, 128,128, 8, 8, 0, 16, 16, 4, 2),
-            # conv.GroupTileDesc(1, 128, 128, 64, 8, 8, 0, 16, 16, 4, 2),
-            # conv.GroupTileDesc(1, 128, 64, 128, 8, 8, 0, 16, 16, 2, 4),
-            # conv.GroupTileDesc(1,  64, 64,  64, 8, 8, 0, 16, 16, 4, 2),
-            # conv.GroupTileDesc(1,  64, 128, 32, 8, 8, 0, 16, 16, 8, 2),
+            conv.GroupTileDesc(1, 256, 256,128, 4, 8, 0, 16, 16, 8, 2),
+            conv.GroupTileDesc(1, 256, 256,128, 8, 8, 0, 16, 16, 8, 2),
+            conv.GroupTileDesc(1, 256, 128,256, 4, 8, 0, 16, 16, 4, 4),
+            conv.GroupTileDesc(1, 256, 128,128, 8, 8, 0, 16, 16, 4, 2),
+            conv.GroupTileDesc(1, 128, 128, 64, 8, 8, 0, 16, 16, 4, 2),
+            conv.GroupTileDesc(1, 128, 64, 128, 8, 8, 0, 16, 16, 2, 4),
+            conv.GroupTileDesc(1,  64, 64,  64, 8, 8, 0, 16, 16, 4, 2),
+            conv.GroupTileDesc(1,  64, 128, 32, 8, 8, 0, 16, 16, 8, 2),
         ]
         c_block_descriptions = [
             conv.CBlockTransferDesc(1, 1, [1, 32, 1, 8], 8),

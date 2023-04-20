@@ -99,7 +99,7 @@ def filter_test_cases_by_test_env(cls: Type[unittest.TestCase]):
 
 def _get_torch_tensor(torch_fn, shape, dtype):
     dtype = normalize_dtype(dtype)
-    return torch_fn(shape, dtype=string_to_torch_dtype(dtype))
+    return torch_fn(shape, device="cuda", dtype=string_to_torch_dtype(dtype))
 
 
 def get_random_torch_tensor(shape, dtype="float16"):

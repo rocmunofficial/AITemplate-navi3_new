@@ -76,14 +76,16 @@ class GEMMBiasTestCase(unittest.TestCase):
 
     def test_rcr_zero_size(self):
         target = detect_target()
-        # This test triggered a c10 assertion failure internally
-        # caffe2/c10/util/SmallVector.h:338:
-        # Assertion `idx < size()' failed
-        if type(target).__name__ != "FBCUDA":
-            self._test_rcr([2], N=64, K=0, test_name="zero_k")
-        self._test_rcr([2], N=0, K=4, test_name="zero_n")
-        self._test_rcr([0], N=4, K=4, test_name="zero_m")
+        if target.name() == "cuda":
+            # This test triggered a c10 assertion failure internally
+            # caffe2/c10/util/SmallVector.h:338:
+            # Assertion `idx < size()' failed
+            if type(target).__name__ != "FBCUDA":
+                self._test_rcr([2], N=64, K=0, test_name="zero_k")
+            self._test_rcr([2], N=0, K=4, test_name="zero_n")
+            self._test_rcr([0], N=4, K=4, test_name="zero_m")
 
+    @unittest.skipIf(detect_target().name() == "rocm", "Not supported by ROCM.")
     def test_rcr_static(self):
         self._test_rcr([4096], N=4, K=4, test_name="static")
         self._test_rcr([1000], N=81, K=1024, test_name="static")
@@ -94,6 +96,7 @@ class GEMMBiasTestCase(unittest.TestCase):
         self._test_rcr([1000], N=81, K=1024, test_name="static")
         self._test_rcr([67200], N=3, K=256, test_name="static")
 
+    @unittest.skipIf(detect_target().name() == "rocm", "Not supported by ROCM.")
     def test_rcr_bfloat16_bf16(self):
         dtype = "bfloat16"
         self._test_rcr([4], N=2, K=11, test_name=f"static_{dtype}", dtype=dtype)
