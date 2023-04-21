@@ -1604,11 +1604,13 @@ def CreateBmmSoftmaxBmmPermOperator(
     c_block_descriptions, b1_block_descriptions = [], []
     for i in range(len(tile_descriptions)):
         if i in [0, 2, 4, 5, 9, 11]:
-            block_transfer = [16, 16, 1]
+            block_transfer = [4, 8, 8]
+            # block_transfer = [16, 16, 1]
         else:
             block_transfer = [8, 32, 1]
         b1_block_descriptions.append(
-            gemm.BlockTransferDesc(block_transfer, [0, 2, 1], [0, 2, 1], 1, 4, 2, 0)
+            gemm.BlockTransferDesc(block_transfer, [0, 2, 1], [0, 2, 1], 1, 8, 1, 0)
+            # gemm.BlockTransferDesc(block_transfer, [0, 2, 1], [0, 2, 1], 1, 4, 2, 0)
         )
 
         if i in [8, 10]:
@@ -1618,8 +1620,11 @@ def CreateBmmSoftmaxBmmPermOperator(
         else:
             c_shuffle = 4 if i in [9, 11] else 2
             c_block_transfer = gemm.MaskedCBlockTransferDesc(
-                1, c_shuffle, [1, 32, 1, 8], 8, causal_mask_flag
+                1, c_shuffle, [1, 64, 1, 4], 8, causal_mask_flag
             )
+            # c_block_transfer = gemm.MaskedCBlockTransferDesc(
+            #     1, c_shuffle, [1, 32, 1, 8], 8, causal_mask_flag
+            # )
 
         c_block_descriptions.append(c_block_transfer)
 
