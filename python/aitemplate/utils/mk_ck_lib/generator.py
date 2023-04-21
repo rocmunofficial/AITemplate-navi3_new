@@ -1584,45 +1584,57 @@ def CreateBmmSoftmaxBmmPermOperator(
         library.DataType.f16, library.LayoutType.RowMajor
     )
     element_op = library.TensorOperation.PassThrough
-    tile_descriptions = [
-        gemm.AttnTileDesc(256, 256, 128, 32, 64, 32, 8, 8, 2, 32, 32, 2, 4, 2),
-        gemm.AttnTileDesc(256, 256, 128, 32, 128, 32, 8, 8, 2, 32, 32, 2, 4, 4),
-        gemm.AttnTileDesc(256, 128, 256, 32, 64, 32, 8, 8, 2, 32, 32, 1, 8, 2),
-        gemm.AttnTileDesc(256, 128, 256, 32, 128, 32, 8, 8, 2, 32, 32, 1, 8, 4),
-        gemm.AttnTileDesc(256, 128, 128, 64, 64, 32, 8, 8, 2, 32, 32, 1, 4, 2),
-        gemm.AttnTileDesc(256, 128, 128, 32, 64, 32, 8, 8, 2, 32, 32, 1, 4, 2),
-        gemm.AttnTileDesc(256, 128, 128, 64, 128, 32, 8, 8, 2, 32, 32, 1, 4, 4),
-        gemm.AttnTileDesc(256, 128, 128, 32, 128, 32, 8, 8, 2, 32, 32, 1, 4, 4),
-        gemm.AttnTileDesc(256, 64, 256, 32, 128, 32, 8, 8, 2, 16, 16, 1, 16, 8),
-        gemm.AttnTileDesc(256, 64, 256, 32, 64, 32, 8, 8, 2, 16, 16, 1, 16, 4),
-        gemm.AttnTileDesc(256, 64, 256, 64, 128, 32, 8, 8, 2, 16, 16, 1, 16, 8),
-        gemm.AttnTileDesc(256, 64, 256, 64, 64, 32, 8, 8, 2, 16, 16, 1, 16, 4),
-        gemm.AttnTileDesc(256, 128, 128, 64, 128, 32, 8, 8, 2, 32, 32, 1, 4, 4),
-        gemm.AttnTileDesc(256, 128, 64, 32, 128, 32, 8, 8, 2, 32, 32, 1, 2, 4),
-        # for MNKOPadding
-        gemm.AttnTileDesc(256, 128, 128, 64, 128, 32, 8, 8, 2, 32, 32, 1, 4, 4),
-        gemm.AttnTileDesc(256, 128, 64, 32, 128, 32, 8, 8, 2, 32, 32, 1, 2, 4),
-    ]
+    if Target.current().get_device_name() == "gfx1100":
+        op_type = gemm.OpType.DeviceBatchedGemmSoftmaxGemmPermute_Wmma_CShuffle
+        
+        tile_descriptions = [
+            gemm.AttnTileDesc(256, 128, 64, 32, 8, 64, 32, 8, 16, 16, 16, 1, 4, 4),
+        ]
 
-    block_descriptions = [
-        gemm.BlockTransferDesc([4, 64, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
-        gemm.BlockTransferDesc([4, 64, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
-        gemm.BlockTransferDesc([4, 64, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
-        gemm.BlockTransferDesc([4, 64, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
-        gemm.BlockTransferDesc([8, 32, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 0),
-        gemm.BlockTransferDesc([4, 64, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
-        gemm.BlockTransferDesc([8, 32, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 0),
-        gemm.BlockTransferDesc([4, 64, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
-        gemm.BlockTransferDesc([4, 64, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
-        gemm.BlockTransferDesc([4, 64, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
-        gemm.BlockTransferDesc([8, 32, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
-        gemm.BlockTransferDesc([8, 32, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
-        gemm.BlockTransferDesc([8, 32, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 0),
-        gemm.BlockTransferDesc([4, 64, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
-        # for MNKOPadding
-        gemm.BlockTransferDesc([8, 32, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 0),
-        gemm.BlockTransferDesc([4, 64, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
-    ]
+        block_descriptions = [
+            gemm.BlockTransferDesc([4, 64, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
+        ]
+        
+    else:
+        tile_descriptions = [
+            gemm.AttnTileDesc(256, 256, 128, 32, 64, 32, 8, 8, 2, 32, 32, 2, 4, 2),
+            gemm.AttnTileDesc(256, 256, 128, 32, 128, 32, 8, 8, 2, 32, 32, 2, 4, 4),
+            gemm.AttnTileDesc(256, 128, 256, 32, 64, 32, 8, 8, 2, 32, 32, 1, 8, 2),
+            gemm.AttnTileDesc(256, 128, 256, 32, 128, 32, 8, 8, 2, 32, 32, 1, 8, 4),
+            gemm.AttnTileDesc(256, 128, 128, 64, 64, 32, 8, 8, 2, 32, 32, 1, 4, 2),
+            gemm.AttnTileDesc(256, 128, 128, 32, 64, 32, 8, 8, 2, 32, 32, 1, 4, 2),
+            gemm.AttnTileDesc(256, 128, 128, 64, 128, 32, 8, 8, 2, 32, 32, 1, 4, 4),
+            gemm.AttnTileDesc(256, 128, 128, 32, 128, 32, 8, 8, 2, 32, 32, 1, 4, 4),
+            gemm.AttnTileDesc(256, 64, 256, 32, 128, 32, 8, 8, 2, 16, 16, 1, 16, 8),
+            gemm.AttnTileDesc(256, 64, 256, 32, 64, 32, 8, 8, 2, 16, 16, 1, 16, 4),
+            gemm.AttnTileDesc(256, 64, 256, 64, 128, 32, 8, 8, 2, 16, 16, 1, 16, 8),
+            gemm.AttnTileDesc(256, 64, 256, 64, 64, 32, 8, 8, 2, 16, 16, 1, 16, 4),
+            gemm.AttnTileDesc(256, 128, 128, 64, 128, 32, 8, 8, 2, 32, 32, 1, 4, 4),
+            gemm.AttnTileDesc(256, 128, 64, 32, 128, 32, 8, 8, 2, 32, 32, 1, 2, 4),
+            # for MNKOPadding
+            gemm.AttnTileDesc(256, 128, 128, 64, 128, 32, 8, 8, 2, 32, 32, 1, 4, 4),
+            gemm.AttnTileDesc(256, 128, 64, 32, 128, 32, 8, 8, 2, 32, 32, 1, 2, 4),
+        ]
+        
+        block_descriptions = [
+            gemm.BlockTransferDesc([4, 64, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
+            gemm.BlockTransferDesc([4, 64, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
+            gemm.BlockTransferDesc([4, 64, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
+            gemm.BlockTransferDesc([4, 64, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
+            gemm.BlockTransferDesc([8, 32, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 0),
+            gemm.BlockTransferDesc([4, 64, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
+            gemm.BlockTransferDesc([8, 32, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 0),
+            gemm.BlockTransferDesc([4, 64, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
+            gemm.BlockTransferDesc([4, 64, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
+            gemm.BlockTransferDesc([4, 64, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
+            gemm.BlockTransferDesc([8, 32, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
+            gemm.BlockTransferDesc([8, 32, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
+            gemm.BlockTransferDesc([8, 32, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 0),
+            gemm.BlockTransferDesc([4, 64, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
+            # for MNKOPadding
+            gemm.BlockTransferDesc([8, 32, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 0),
+            gemm.BlockTransferDesc([4, 64, 1], [1, 0, 2], [1, 0, 2], 2, 8, 8, 1),
+        ]
     causal_mask_flag = 0
     if causal_mask is not None:
         causal_mask_flag = 1 if library.TensorOperationTag[causal_mask] == "True" else 0
@@ -1630,11 +1642,13 @@ def CreateBmmSoftmaxBmmPermOperator(
     c_block_descriptions, b1_block_descriptions = [], []
     for i in range(len(tile_descriptions)):
         if i in [0, 2, 4, 5, 9, 11]:
-            block_transfer = [16, 16, 1]
+            block_transfer = [4, 8, 8]
+            # block_transfer = [16, 16, 1]
         else:
             block_transfer = [8, 32, 1]
         b1_block_descriptions.append(
-            gemm.BlockTransferDesc(block_transfer, [0, 2, 1], [0, 2, 1], 1, 4, 2, 0)
+            gemm.BlockTransferDesc(block_transfer, [0, 2, 1], [0, 2, 1], 1, 8, 1, 0)
+            # gemm.BlockTransferDesc(block_transfer, [0, 2, 1], [0, 2, 1], 1, 4, 2, 0)
         )
 
         if i in [8, 10]:
@@ -1644,8 +1658,11 @@ def CreateBmmSoftmaxBmmPermOperator(
         else:
             c_shuffle = 4 if i in [9, 11] else 2
             c_block_transfer = gemm.MaskedCBlockTransferDesc(
-                1, c_shuffle, [1, 32, 1, 8], 8, causal_mask_flag
+                1, c_shuffle, [1, 64, 1, 4], 8, causal_mask_flag
             )
+            # c_block_transfer = gemm.MaskedCBlockTransferDesc(
+            #     1, c_shuffle, [1, 32, 1, 8], 8, causal_mask_flag
+            # )
 
         c_block_descriptions.append(c_block_transfer)
 
