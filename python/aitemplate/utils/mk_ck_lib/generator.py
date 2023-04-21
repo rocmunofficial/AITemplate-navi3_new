@@ -1669,7 +1669,10 @@ def CreateBmmSoftmaxBmmPermOperator(
     gemm_specialization = []
     for i in range(len(tile_descriptions)):
         if i < 12:
-            gemm_specialization.append(gemm.GemmSpecialization.GemmDefault)
+            if Target.current().get_device_name() == "gfx1100":
+                gemm_specialization.append(gemm.GemmSpecialization.MNKOPadding)
+            else:
+                gemm_specialization.append(gemm.GemmSpecialization.GemmDefault)
         elif i in [12, 13]:
             gemm_specialization.append(gemm.GemmSpecialization.MNOPadding)
         else:
