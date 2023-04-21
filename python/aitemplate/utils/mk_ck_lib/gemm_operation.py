@@ -54,6 +54,7 @@ class OpType(enum.Enum):
     DeviceBatchedContractionMultipleD_Wmma_CShuffle = auto()
     DeviceBatchedGemmSoftmaxGemm_Xdl_CShuffle = auto()
     DeviceBatchedGemmSoftmaxGemmPermute_Xdl_CShuffle = auto()
+    DeviceBatchedGemmSoftmaxGemmPermute_Wmma_CShuffle = auto()
     DeviceBatchedGemmMultiD_Xdl = auto()
 
 
@@ -69,6 +70,7 @@ OpTag = {
     OpType.DeviceBatchedContractionMultipleD_Wmma_CShuffle: "ck::tensor_operation::device::DeviceBatchedContractionMultipleD_Wmma_CShuffle",
     OpType.DeviceBatchedGemmSoftmaxGemm_Xdl_CShuffle: "ck::tensor_operation::device::DeviceBatchedGemmSoftmaxGemm_Xdl_CShuffle",
     OpType.DeviceBatchedGemmSoftmaxGemmPermute_Xdl_CShuffle: "ck::tensor_operation::device::DeviceBatchedGemmSoftmaxGemmPermute_Xdl_CShuffle",
+    OpType.DeviceBatchedGemmSoftmaxGemmPermute_Wmma_CShuffle: "ck::tensor_operation::device::DeviceBatchedGemmSoftmaxGemmPermute_Wmma_CShuffle",
     OpType.DeviceBatchedGemmMultiD_Xdl: "ck::tensor_operation::device::DeviceBatchedGemmMultiD_Xdl",
 }
 
@@ -437,8 +439,20 @@ using {{name}} = {{op_type}}<
     ck::Tuple<>,
     {{AccDType}},
     float, // CShuffleDType,
-// DeviceBatchedGemmMultiD_Xdl
+// DeviceBatchedGemmSoftmaxGemmPermute_Wmma_CShuffle
 {% elif op_type_value == 12 %}
+    2, 1, 1, 1, 1,
+    {{ADType}},
+    {{BDType}},
+    {{BDType}},
+    {{CDType}},
+    ck::Tuple<>,
+    {{AccDType}},
+    ck::Tuple<>,
+    {{AccDType}},
+    float, // CShuffleDType,
+// DeviceBatchedGemmMultiD_Xdl
+{% elif op_type_value == 13 %}
     {{ALayout}},
     {{BLayout}},
     ck::Tuple<{{DsLayout}}>, // DsLayout
@@ -451,7 +465,8 @@ using {{name}} = {{op_type}}<
     {{EDType}},
 {% endif %}
 // DeviceBatchedGemmSoftmaxGemm_Xdl_CShuffle + DeviceBatchedGemmSoftmaxGemmPermute_Xdl_CShuffle
-{% if op_type_value in [10, 11] %}
+// DeviceBatchedGemmSoftmaxGemmPermute_Wmma_CShuffle 
+{% if op_type_value in [10, 11, 12] %}
     {{A_elem_op}},
     {{B_elem_op}},
     ck::tensor_operation::element_wise::ScaleAndResetNaNToMinusInfinity,
@@ -468,8 +483,8 @@ using {{name}} = {{op_type}}<
     ck::tensor_operation::device::TensorSpecialization::Packed,
     ck::tensor_operation::device::TensorSpecialization::Packed,
     ck::tensor_operation::device::TensorSpecialization::Default,
-    // DeviceBatchedGemmSoftmaxGemmPermute_Xdl_CShuffle
-    {% elif op_type_value == 11 %}
+    // DeviceBatchedGemmSoftmaxGemmPermute_Xdl_CShuffle + DeviceBatchedGemmSoftmaxGemmPermute_Wmma_CShuffle
+    {% elif op_type_value in [11, 12] %}
     ck::tensor_operation::device::TensorSpecialization::Default,
     ck::tensor_operation::device::TensorSpecialization::Default,
     ck::tensor_operation::device::TensorSpecialization::Default,
@@ -480,7 +495,7 @@ using {{name}} = {{op_type}}<
     {{tile_config}}
     {{a_block_transfer}}
     {{b_block_transfer}}
-{% if op_type_value in [10, 11] %} // DeviceBatchedGemmSoftmaxGemm
+{% if op_type_value in [10, 11, 12] %} // DeviceBatchedGemmSoftmaxGemm
     {{b1_block_transfer}}
 {% endif %}
 {% if op_type_value != 5 %} // DeviceBatchedGemmXdl
