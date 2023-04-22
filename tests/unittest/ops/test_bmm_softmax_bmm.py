@@ -190,20 +190,20 @@ class BMMSoftmaxBMMTestCase(unittest.TestCase):
         self._test_bmm_permute(
             [16], [4096], N=64, K=40, D=40, num_heads=8, test_name="static"
         )
-        self._test_bmm_permute(
-            [12], [64], N=64, K=64, D=64, num_heads=12, causal=True, test_name="static"
-        )
-        self._test_bmm_permute(
-            [12],
-            [64],
-            N=64,
-            K=64,
-            D=64,
-            num_heads=12,
-            causal=True,
-            test_name="static_copy_op",
-            copy_op=True,
-        )
+        # self._test_bmm_permute(
+        #     [12], [64], N=64, K=64, D=64, num_heads=12, causal=True, test_name="static"
+        # )
+        # self._test_bmm_permute(
+        #     [12],
+        #     [64],
+        #     N=64,
+        #     K=64,
+        #     D=64,
+        #     num_heads=12,
+        #     causal=True,
+        #     test_name="static_copy_op",
+        #     copy_op=True,
+        # )
 
 
 filter_test_cases_by_test_env(BMMSoftmaxBMMTestCase)

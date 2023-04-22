@@ -146,25 +146,32 @@ def CreateConv2dFwdOperator(manifest, operation_kind, out_element_op, out_data_o
 
     conv2d_specialization = [conv.Conv2DSpecialization.ConvFwdOddC]
 
-    # if Target.current().get_device_name() == "gfx1100":
-    #     tile_descriptions += []
-    # else:    
-    #     tile_descriptions += [
-    #         conv.GroupTileDesc(1, 256, 128, 64, 32, 8, 8, 32, 32, 2, 1),
-    #         conv.GroupTileDesc(1, 256, 128, 64, 32, 8, 8, 32, 32, 2, 1),
-    #         conv.GroupTileDesc(1, 256, 256, 64, 32, 8, 8, 32, 32, 4, 1),
-    #         conv.GroupTileDesc(1, 128, 128, 64, 32, 8, 8, 32, 32, 2, 2),
-    #         conv.GroupTileDesc(1, 128, 64, 64, 32, 8, 8, 32, 32, 1, 2),
-    #         conv.GroupTileDesc(1, 256, 256, 16, 32, 8, 8, 16, 16, 4, 1),  # c_out=1
-    #     ]
+    if Target.current().get_device_name() == "gfx1100":
+        tile_descriptions = [
+            conv.GroupTileDesc(1, 256, 128, 64, 32, 8, 0, 16, 16, 4, 1),
+            conv.GroupTileDesc(1, 256, 128, 64, 64, 8, 0, 16, 16, 4, 1),
+            conv.GroupTileDesc(1, 256, 256, 64, 32, 8, 0, 16, 16, 8, 1),
+            # conv.GroupTileDesc(1, 128, 128, 64, 32, 8, 0, 16, 16, 4, 2),
+            conv.GroupTileDesc(1, 128, 64, 64, 32, 8, 0, 16, 16, 2, 2),
+            conv.GroupTileDesc(1, 256, 128, 16, 32, 8, 0, 16, 16, 1, 1),  # c_out=1
+        ]
+    else:    
+        tile_descriptions += [
+            conv.GroupTileDesc(1, 256, 128, 64, 32, 8, 8, 32, 32, 2, 1),
+            conv.GroupTileDesc(1, 256, 128, 64, 32, 8, 8, 32, 32, 2, 1),
+            conv.GroupTileDesc(1, 256, 256, 64, 32, 8, 8, 32, 32, 4, 1),
+            conv.GroupTileDesc(1, 128, 128, 64, 32, 8, 8, 32, 32, 2, 2),
+            conv.GroupTileDesc(1, 128, 64, 64, 32, 8, 8, 32, 32, 1, 2),
+            conv.GroupTileDesc(1, 256, 256, 16, 32, 8, 8, 16, 16, 4, 1),  # c_out=1
+        ]
 
     block_descriptions = [
         conv.BlockTransferDesc([4, 8, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
         conv.BlockTransferDesc([4, 8, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
+        conv.BlockTransferDesc([4, 8, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
+        # conv.BlockTransferDesc([4, 4, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
         conv.BlockTransferDesc([4, 4, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
         conv.BlockTransferDesc([4, 8, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
-        conv.BlockTransferDesc([4, 4, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
-        conv.BlockTransferDesc([4, 4, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
         conv.BlockTransferDesc([4, 2, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
         conv.BlockTransferDesc([4, 8, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
         conv.BlockTransferDesc([4, 8, 8], [1, 0, 2], [1, 0, 2], 2, 1, 1, 1),
@@ -179,14 +186,14 @@ def CreateConv2dFwdOperator(manifest, operation_kind, out_element_op, out_data_o
         conv.BlockTransferDesc([4, 16, 4], [1, 0, 2], [1, 0, 2], 2, 2, 2, 1),  # c_out=1
     ]
 
-    # c_block_descriptions += [
-    #     conv.CBlockTransferDesc(1, 1, [1, 32, 1, 8], 8),
-    #     conv.CBlockTransferDesc(1, 1, [1, 32, 1, 8], 8),
-    #     conv.CBlockTransferDesc(1, 1, [1, 32, 1, 8], 8),
-    #     conv.CBlockTransferDesc(1, 1, [1, 32, 1, 4], 8),
-    #     conv.CBlockTransferDesc(1, 1, [1, 16, 1, 4], 8),
-    #     conv.CBlockTransferDesc(4, 1, [1, 256, 1, 1], 1),  # c_out=1
-    # ]
+    c_block_descriptions = [
+        conv.CBlockTransferDesc(1, 1, [1, 32, 1, 8], 8),
+        conv.CBlockTransferDesc(1, 1, [1, 32, 1, 8], 8),
+        conv.CBlockTransferDesc(1, 1, [1, 32, 1, 8], 8),
+        # conv.CBlockTransferDesc(1, 1, [1, 32, 1, 4], 8),
+        conv.CBlockTransferDesc(1, 1, [1, 16, 1, 4], 8),
+        conv.CBlockTransferDesc(1, 1, [1, 16, 1, 16], 1),  # c_out=1
+    ]
     for conv2d_spec in conv2d_specialization:
         for gemm_spec in gemm_specialization:
             for tile_desc, block_desc, c_block_desc in zip(
