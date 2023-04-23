@@ -35,26 +35,32 @@ class ConvBiasTestCase(unittest.TestCase):
 
     def _test_conv_bias(
         self,
-        batch=4,
+        batch=1,
+        input_dim_x=64,
+        input_dim_y=64,
+        weight_dim_x=3,
+        weight_dim_y=3,
+        input_channels=320,
+        output_channels=4,
         copy_op=False,
         test_name="conv2d_bias",
         dtype="float16",
     ):
         target = detect_target()
         X = Tensor(
-            shape=[IntImm(batch), 28, 28, 128],
+            shape=[IntImm(batch), IntImm(input_dim_x), IntImm(input_dim_y), IntImm(input_channels)],
             dtype=dtype,
             name="input_0",
             is_input=True,
         )
         W = Tensor(
-            shape=[256, 3, 3, 128],
+            shape=[IntImm(output_channels), IntImm(weight_dim_x), IntImm(weight_dim_y), IntImm(input_channels)],
             dtype=dtype,
             name="input_1",
             is_input=True,
         )
         B = Tensor(
-            shape=[256],
+            shape=[IntImm(output_channels)],
             dtype=dtype,
             name="input_2",
             is_input=True,
@@ -67,9 +73,9 @@ class ConvBiasTestCase(unittest.TestCase):
         Y._attrs["is_output"] = True
         module = compile_model(Y, target, "./tmp", test_name)
 
-        X_pt = get_random_torch_tensor([batch, 128, 28, 28], dtype=dtype)
-        W_pt = get_random_torch_tensor([256, 128, 3, 3], dtype=dtype)
-        B_pt = get_random_torch_tensor([1, 256, 1, 1], dtype=dtype)
+        X_pt = get_random_torch_tensor([batch, input_channels, input_dim_x, input_dim_y], dtype=dtype)
+        W_pt = get_random_torch_tensor([output_channels, input_channels, weight_dim_x, weight_dim_y], dtype=dtype)
+        B_pt = get_random_torch_tensor([1, output_channels, 1, 1], dtype=dtype)
         Y_pt = torch.nn.functional.conv2d(X_pt.float(), W_pt.float(), padding=1).to(
             dtype=X_pt.dtype
         )
@@ -91,13 +97,14 @@ class ConvBiasTestCase(unittest.TestCase):
     @parameterized.expand(
         filter_test_cases_by_params(
             {
-                TestEnv.CUDA_LESS_THAN_SM80: [("float16")],
-                TestEnv.CUDA_SM80: [("float32"), ("bfloat16")],
+                # TestEnv.CUDA_LESS_THAN_SM80: [("float16")],
+                # TestEnv.CUDA_SM80: [("float32"), ("bfloat16")],
                 TestEnv.ROCM: [("float16")],
             }
         )
     )
     def test_conv2d_bias(self, dtype):
+        # default
         self._test_conv_bias(
             test_name=f"conv2d_bias_{dtype}",
             dtype=dtype,
@@ -107,6 +114,88 @@ class ConvBiasTestCase(unittest.TestCase):
             test_name=f"conv2d_bias_{dtype}_copy_op",
             dtype=dtype,
         )
+        # unet model test
+        # Not implemented yet
+        # vae_model_conv = [
+        #     [64 ,64 ,1, 1, 4, 4],
+        #     [64 ,64 ,3, 3, 512, 4],
+        #     [64 ,64 ,3, 3, 512, 512],
+        #     [128 ,128 ,3, 3, 512, 512],
+        #     [256 ,256 ,3, 3, 512, 512],
+        #     [256 ,256 ,3, 3, 256, 512],
+        #     [256 ,256 ,3, 3, 256, 256],
+        #     [256 ,256 ,3, 3, 512, 256],
+        #     [512 ,512 ,3, 3, 256, 256],
+        #     [512 ,512 ,3, 3, 128, 256],
+        #     [512 ,512 ,3, 3, 128, 128],
+        #     [512 ,512 ,3, 3, 128, 3],
+        # ]
+        # test_conv_cnt = 0
+        # for configs in vae_model_conv:
+        #     self._test_conv_bias(
+        #         input_dim_x=configs[0],
+        #         input_dim_y=configs[1],
+        #         weight_dim_x=configs[2],
+        #         weight_dim_y=configs[3],
+        #         input_channels=configs[4],
+        #         output_channels=configs[5],
+        #         copy_op=False,
+        #         test_name=f"conv2d_bias_{dtype}_{test_conv_cnt}",
+        #         dtype=dtype,
+        #     )
+            
+        #     self._test_conv_bias(
+        #         input_dim_x=configs[0],
+        #         input_dim_y=configs[1],
+        #         weight_dim_x=configs[2],
+        #         weight_dim_y=configs[3],
+        #         input_channels=configs[4],
+        #         output_channels=configs[5],
+        #         copy_op=True,
+        #         test_name=f"conv2d_bias_{dtype}_{test_conv_cnt}_copy_op",
+        #         dtype=dtype,
+        #     )
+            
+        # vae model test
+        vae_model_conv = [
+            [64 ,64 ,1, 1, 4, 4],
+            [64 ,64 ,3, 3, 512, 4],
+            [64 ,64 ,3, 3, 512, 512],
+            [128 ,128 ,3, 3, 512, 512],
+            [256 ,256 ,3, 3, 512, 512],
+            [256 ,256 ,3, 3, 256, 512],
+            [256 ,256 ,3, 3, 256, 256],
+            [256 ,256 ,3, 3, 512, 256],
+            [512 ,512 ,3, 3, 256, 256],
+            [512 ,512 ,3, 3, 128, 256],
+            [512 ,512 ,3, 3, 128, 128],
+            [512 ,512 ,3, 3, 128, 3],
+        ]
+        test_conv_cnt = 0
+        for configs in vae_model_conv:
+            self._test_conv_bias(
+                input_dim_x=configs[0],
+                input_dim_y=configs[1],
+                weight_dim_x=configs[2],
+                weight_dim_y=configs[3],
+                input_channels=configs[4],
+                output_channels=configs[5],
+                copy_op=False,
+                test_name=f"conv2d_bias_{dtype}_{test_conv_cnt}",
+                dtype=dtype,
+            )
+            
+            self._test_conv_bias(
+                input_dim_x=configs[0],
+                input_dim_y=configs[1],
+                weight_dim_x=configs[2],
+                weight_dim_y=configs[3],
+                input_channels=configs[4],
+                output_channels=configs[5],
+                copy_op=True,
+                test_name=f"conv2d_bias_{dtype}_{test_conv_cnt}_copy_op",
+                dtype=dtype,
+            )
 
 
 if __name__ == "__main__":

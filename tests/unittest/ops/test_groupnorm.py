@@ -145,6 +145,17 @@ class GroupnormTestCase(unittest.TestCase):
         self._test_groupnorm(
             x_shape=[1, 512, 512, 256], num_groups=32, eps=1e-5, use_swish=True
         )
+        # vae model groupnorm+swish
+        vae_shapes = [
+            (1, 64, 64, 512),
+            (1, 128, 128, 512),
+            (1, 256, 256, 512),
+            (1, 256, 256, 256),
+            (1, 512, 512, 256),
+            (1, 512, 512, 128),
+        ]
+        for shape in vae_shapes:
+            self._test_groupnorm(x_shape=shape, num_groups=32, eps=1e-5, use_swish=True)
 
         # For benchmark only.
         # shapes = [
