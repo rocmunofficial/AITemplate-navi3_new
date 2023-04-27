@@ -43,16 +43,31 @@ def CreateConv2dFwdOperator(manifest, operation_kind, out_element_op, out_data_o
 
     if Target.current().get_device_name() == "gfx1100":
         tile_descriptions = [
-            conv.GroupTileDesc(1, 256, 256, 64, 64, 8, 0, 16, 16, 8, 1),
-            conv.GroupTileDesc(1, 256, 64, 256, 64, 8, 0, 16, 16, 2, 4),
-            conv.GroupTileDesc(1, 256, 256,128, 32, 8, 0, 16, 16, 8, 2),
-            conv.GroupTileDesc(1, 256, 256,128, 64, 8, 0, 16, 16, 8, 2),
-            conv.GroupTileDesc(1, 256, 128,256, 32, 8, 0, 16, 16, 4, 4),
-            conv.GroupTileDesc(1, 256, 128,128, 64, 8, 0, 16, 16, 4, 2),
-            conv.GroupTileDesc(1, 128, 128, 64, 64, 8, 0, 16, 16, 4, 2),
-            conv.GroupTileDesc(1, 128, 64, 128, 64, 8, 0, 16, 16, 2, 4),
-            conv.GroupTileDesc(1,  64, 64,  64, 64, 8, 0, 16, 16, 4, 2),
-            conv.GroupTileDesc(1,  64, 128, 32, 64, 8, 0, 16, 16, 8, 2),
+            conv.GroupTileDesc(1, 256, 256, 128, 64, 8, 0, 16, 16, 8, 2),
+            conv.GroupTileDesc(1, 256, 256, 128, 32, 8, 0, 16, 16, 8, 2),
+            conv.GroupTileDesc(1, 256, 256,  64, 64, 8, 0, 16, 16, 8, 1),
+            conv.GroupTileDesc(1, 256, 128, 256, 32, 8, 0, 16, 16, 4, 4),
+            conv.GroupTileDesc(1, 256, 128, 128, 64, 8, 0, 16, 16, 4, 2),
+            conv.GroupTileDesc(1, 256,  64, 256, 64, 8, 0, 16, 16, 2, 4),
+            
+            conv.GroupTileDesc(1, 256, 128, 160, 64, 8, 0, 16, 16, 2, 5),
+            
+            conv.GroupTileDesc(1, 128, 128,  64, 64, 8, 0, 16, 16, 4, 2),
+            conv.GroupTileDesc(1, 128,  64, 128, 64, 8, 0, 16, 16, 2, 4),
+            conv.GroupTileDesc(1, 128,  64,  64, 64, 8, 0, 16, 16, 2, 2),
+            conv.GroupTileDesc(1, 128,  64,  32, 64, 8, 0, 16, 16, 2, 1),
+            conv.GroupTileDesc(1, 128,  32, 128, 64, 8, 0, 16, 16, 1, 4),
+            conv.GroupTileDesc(1, 128,  32,  64, 64, 8, 0, 16, 16, 1, 2),
+            
+            conv.GroupTileDesc(1, 128,  64,  80, 64, 8, 0, 16, 16, 1, 5),
+
+            conv.GroupTileDesc(1,  64, 32, 32, 64, 8, 0, 16, 16, 2, 1),
+            conv.GroupTileDesc(1,  64, 16, 64, 64, 8, 0, 16, 16, 1, 2),
+            
+            conv.GroupTileDesc(1,  64, 32, 80, 64, 8, 0, 16, 16, 1, 5),
+   
+            conv.GroupTileDesc(1,  32, 16, 32, 64, 8, 0, 16, 16, 1, 2),
+            conv.GroupTileDesc(1,  32, 16, 16, 64, 8, 0, 16, 16, 1, 1),
         ]
         c_block_descriptions = [
             conv.CBlockTransferDesc(1, 1, [1, 32, 1, 8], 8),
@@ -60,10 +75,23 @@ def CreateConv2dFwdOperator(manifest, operation_kind, out_element_op, out_data_o
             conv.CBlockTransferDesc(1, 1, [1, 32, 1, 8], 8),
             conv.CBlockTransferDesc(1, 1, [1, 32, 1, 8], 8),
             conv.CBlockTransferDesc(1, 1, [1, 32, 1, 8], 8),
+            conv.CBlockTransferDesc(1, 1, [1, 32, 1, 8], 8),
+            conv.CBlockTransferDesc(1, 1, [1, 64, 1, 4], 8),
+            
             conv.CBlockTransferDesc(1, 1, [1, 32, 1, 4], 8),
             conv.CBlockTransferDesc(1, 1, [1, 32, 1, 4], 8),
+            conv.CBlockTransferDesc(1, 1, [1, 32, 1, 4], 8),
+            conv.CBlockTransferDesc(1, 1, [1, 32, 1, 4], 8),
+            conv.CBlockTransferDesc(1, 1, [1, 32, 1, 4], 8),
+            conv.CBlockTransferDesc(1, 1, [1, 32, 1, 4], 8),
+            conv.CBlockTransferDesc(1, 1, [1, 64, 1, 2], 8),
+            
             conv.CBlockTransferDesc(1, 1, [1, 16, 1, 4], 8),
             conv.CBlockTransferDesc(1, 1, [1, 16, 1, 4], 8),
+            conv.CBlockTransferDesc(1, 1, [1, 32, 1, 2], 8),
+            
+            conv.CBlockTransferDesc(1, 1, [1, 16, 1, 2], 8),
+            conv.CBlockTransferDesc(1, 1, [1, 16, 1, 2], 8),
         ]
     else:
         tile_descriptions = [
@@ -100,11 +128,19 @@ def CreateConv2dFwdOperator(manifest, operation_kind, out_element_op, out_data_o
     for t in tile_descriptions:
         block_transfer = -1
         if t.block_size == 256:
-            block_transfer = [4, 64, 1]
+            if t.n_per_block % 80 == 0:
+                block_transfer = [8, 32, 1]
+            else:
+                block_transfer = [4, 64, 1]
         if t.block_size == 128:
-            block_transfer = [4, 32, 1]
+            if t.n_per_block % 80 == 0:
+                block_transfer = [8, 16, 1]
+            else:
+                block_transfer = [4, 32, 1]
         if t.block_size == 64:
             block_transfer = [4, 16, 1]
+        if t.block_size == 32:
+            block_transfer = [2, 16, 1]
         assert (
             block_transfer != -1
             and "Cannot determine block_transfer_size with block_size "
@@ -733,13 +769,24 @@ def CreateGemmRCRBillinearOperator(manifest, c_element_op):
             gemm.TileDesc(256, 256, 128, 32, 8, 0, 16, 16, 8, 2),
             gemm.TileDesc(256, 128, 128, 64, 8, 0, 16, 16, 4, 2),
             gemm.TileDesc(256, 128, 128, 32, 8, 0, 16, 16, 4, 2),
+            
+            gemm.TileDesc(256, 128, 160, 64, 8, 0, 16, 16, 2, 5),
+            
             gemm.TileDesc(128, 128, 128, 32, 8, 0, 16, 16, 8, 2),
             gemm.TileDesc(128, 256, 64, 64, 8, 0, 16, 16, 8, 2),
             gemm.TileDesc(128, 64, 256, 64, 8, 0, 16, 16, 2, 8),
+            
+            gemm.TileDesc(128,  64,  80, 64, 8, 0, 16, 16, 1, 5),
+            
             gemm.TileDesc(64,  16, 64, 64, 8, 0, 16, 16, 1, 2),
             gemm.TileDesc(64,  16, 128, 64, 8, 0, 16, 16, 1, 4),
             gemm.TileDesc(64, 64, 32, 64, 8, 0, 16, 16, 4, 1),
             gemm.TileDesc(64, 32, 64, 64, 8, 0, 16, 16, 2, 2),
+            
+            gemm.TileDesc(64, 32, 80, 64, 8, 0, 16, 16, 1, 5),
+            
+            gemm.TileDesc(32, 16, 32, 64, 8, 0, 16, 16, 1, 2),
+            gemm.TileDesc(32, 16, 16, 64, 8, 0, 16, 16, 1, 1),
         ]
     else:
         tile_descriptions = [
@@ -764,17 +811,33 @@ def CreateGemmRCRBillinearOperator(manifest, c_element_op):
         block_transfer = -1
         c_block_transfer = -1
         if t.block_size == 256:
-            block_transfer = [4, 64, 1]
-            c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 32, 1, 8], 8)
-        if t.block_size == 128:
-            block_transfer = [4, 32, 1]
-            if t.n_per_block == 128:
-                c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 16, 1, 8], 8)
+            if t.n_per_block % 80 == 0:
+                block_transfer = [8, 32, 1]
+                c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 64, 1, 4], 8)
             else:
-                c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 32, 1, 4], 8)
+                block_transfer = [4, 64, 1]
+                c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 32, 1, 8], 8)
+        if t.block_size == 128:
+            if t.n_per_block % 80 == 0:
+                block_transfer = [8, 16, 1]
+                c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 64, 1, 2], 8)
+            else:
+                block_transfer = [4, 32, 1]
+                if t.n_per_block == 128:
+                    c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 16, 1, 8], 8)
+                else:
+                    c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 32, 1, 4], 8)
         if t.block_size == 64:
-            block_transfer = [4, 16, 1]
-            c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 16, 1, 4], 8)
+            if t.n_per_block % 80 == 0:
+                block_transfer = [4, 16, 1]
+                c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 32, 1, 2], 8)
+            else:
+                block_transfer = [4, 16, 1]
+                c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 16, 1, 4], 8)
+            
+        if t.block_size == 32:
+            block_transfer = [2, 16, 1]
+            c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 16, 1, 2], 8)
 
         assert (
             block_transfer != -1
@@ -1203,13 +1266,24 @@ def CreateGemmRCRm2n3PermOperator(manifest, c_element_op):
             gemm.TileDesc(256, 128, 128, 32, 8, 0, 16, 16, 4, 2),
             gemm.TileDesc(256, 256,  64, 64, 8, 0, 16, 16, 8, 1),
             gemm.TileDesc(256, 64, 256, 64, 8, 0, 16, 16, 2, 4),
+            
+            gemm.TileDesc(256, 128, 160, 64, 8, 0, 16, 16, 2, 5),
+            
             gemm.TileDesc(128, 128, 128, 64, 8, 0, 16, 16, 8, 2),
             gemm.TileDesc(128, 128,  64, 64, 8, 0, 16, 16, 4, 2),
             gemm.TileDesc(128,  64, 128, 64, 8, 0, 16, 16, 4, 2),
+            
+            gemm.TileDesc(128,  64,  80, 64, 8, 0, 16, 16, 1, 5),
+            
             gemm.TileDesc(64,  16, 64, 64, 8, 0, 16, 16, 1, 2),
             gemm.TileDesc(64,  16, 128, 64, 8, 0, 16, 16, 1, 4),
             gemm.TileDesc(64,  32, 64, 32, 8, 0, 16, 16, 2, 2),
             gemm.TileDesc(64,  64, 32, 64, 8, 0, 16, 16, 4, 1),
+            
+            gemm.TileDesc(64, 32, 80, 64, 8, 0, 16, 16, 1, 5),
+            
+            gemm.TileDesc(32, 16, 32, 64, 8, 0, 16, 16, 1, 2),
+            gemm.TileDesc(32, 16, 16, 64, 8, 0, 16, 16, 1, 1),
         ]
     else:
         tile_descriptions = [
@@ -1234,19 +1308,32 @@ def CreateGemmRCRm2n3PermOperator(manifest, c_element_op):
         block_transfer = -1
         c_block_transfer = -1
         if t.block_size == 256:
-            block_transfer = [4, 64, 1]
-            # TODO:figure out the last dimension
-            c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 32, 1, 8], 8)
-        if t.block_size == 128:
-            block_transfer = [4, 32, 1]
-            if t.n_per_block == 128:
-                c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 16, 1, 8], 8)
+            if t.n_per_block % 80 == 0:
+                block_transfer = [8, 32, 1]
+                c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 64, 1, 4], 8)
             else:
-                c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 32, 1, 4], 8)
+                block_transfer = [4, 64, 1]
+                c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 32, 1, 8], 8)
+        if t.block_size == 128:
+            if t.n_per_block % 80 == 0:
+                block_transfer = [8, 16, 1]
+                c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 64, 1, 2], 8)
+            else:    
+                block_transfer = [4, 32, 1]
+                if t.n_per_block == 128:
+                    c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 16, 1, 8], 8)
+                else:
+                    c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 32, 1, 4], 8)
         if t.block_size == 64:
-            block_transfer = [4, 16, 1]
-            c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 16, 1, 4], 8)
-
+            if t.n_per_block % 80 == 0:
+                block_transfer = [4, 16, 1]
+                c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 32, 1, 2], 8)
+            else:
+                block_transfer = [4, 16, 1]
+                c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 16, 1, 4], 8)
+        if t.block_size == 32:
+            block_transfer = [2, 16, 1]
+            c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 16, 1, 2], 8)
         assert (
             block_transfer != -1
             and c_block_transfer != -1
@@ -1320,13 +1407,24 @@ def CreateGemmRCRm3n2PermOperator(manifest, c_element_op):
             gemm.TileDesc(256, 128, 128, 32, 8, 0, 16, 16, 4, 2),
             gemm.TileDesc(256, 256,  64, 64, 8, 0, 16, 16, 8, 1),
             gemm.TileDesc(256, 64, 256, 64, 8, 0, 16, 16, 2, 4),
+            
+            gemm.TileDesc(256, 128, 160, 64, 8, 0, 16, 16, 2, 5),
+            
             gemm.TileDesc(128, 128, 128, 64, 8, 0, 16, 16, 8, 2),
             gemm.TileDesc(128, 128,  64, 64, 8, 0, 16, 16, 4, 2),
             gemm.TileDesc(128,  64, 128, 64, 8, 0, 16, 16, 4, 2),
+            
+            gemm.TileDesc(128,  64,  80, 64, 8, 0, 16, 16, 1, 5),
+            
             gemm.TileDesc(64,  16, 64, 64, 8, 0, 16, 16, 1, 2),
             gemm.TileDesc(64,  16, 128, 64, 8, 0, 16, 16, 1, 4),
             gemm.TileDesc(64,  32, 64, 32, 8, 0, 16, 16, 2, 2),
             gemm.TileDesc(64,  64, 32, 64, 8, 0, 16, 16, 4, 1),
+            
+            gemm.TileDesc(64, 32, 80, 64, 8, 0, 16, 16, 1, 5),
+            
+            gemm.TileDesc(32, 16, 32, 64, 8, 0, 16, 16, 1, 2),
+            gemm.TileDesc(32, 16, 16, 64, 8, 0, 16, 16, 1, 1),
         ]
     else:
         tile_descriptions = [
@@ -1351,19 +1449,32 @@ def CreateGemmRCRm3n2PermOperator(manifest, c_element_op):
         block_transfer = -1
         c_block_transfer = -1
         if t.block_size == 256:
-            block_transfer = [4, 64, 1]
-            # TODO:figure out the last dimension
-            c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 32, 1, 8], 1)
-        if t.block_size == 128:
-            block_transfer = [4, 32, 1]
-            if t.n_per_block == 128:
-                c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 16, 1, 8], 1)
+            if t.n_per_block % 80 == 0:
+                block_transfer = [8, 32, 1]
+                c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 64, 1, 4], 8)
             else:
-                c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 32, 1, 4], 1)
+                block_transfer = [4, 64, 1]
+                c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 32, 1, 8], 8)
+        if t.block_size == 128:
+            if t.n_per_block % 80 == 0:
+                block_transfer = [8, 16, 1]
+                c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 64, 1, 2], 8)
+            else:    
+                block_transfer = [4, 32, 1]
+                if t.n_per_block == 128:
+                    c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 16, 1, 8], 8)
+                else:
+                    c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 32, 1, 4], 8)
         if t.block_size == 64:
-            block_transfer = [4, 16, 1]
-            c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 16, 1, 4], 1)
-
+            if t.n_per_block % 80 == 0:
+                block_transfer = [4, 16, 1]
+                c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 32, 1, 2], 8)
+            else:
+                block_transfer = [4, 16, 1]
+                c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 16, 1, 4], 8)
+        if t.block_size == 32:
+            block_transfer = [2, 16, 1]
+            c_block_transfer = gemm.CBlockTransferDesc(1, 1, [1, 16, 1, 2], 8)
         assert (
             block_transfer != -1
             and c_block_transfer != -1

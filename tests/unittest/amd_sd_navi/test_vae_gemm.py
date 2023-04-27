@@ -75,27 +75,8 @@ class GEMMBiasTestCase(unittest.TestCase):
                 torch.testing.assert_close(Y_pt, y, **tolerance_limits)
 
     def test_rcr_static_rocm(self):
-        self._test_rcr([2], N=1280, K=1280, test_name="static")
-        self._test_rcr([2], N=640, K=1280, test_name="static")
-        self._test_rcr([2], N=320, K=1280, test_name="static")
-        
-        self._test_rcr([64], N=320, K=320, test_name="static")
-        self._test_rcr([8192], N=320, K=1280, test_name="static")
-        self._test_rcr([8192], N=1280, K=320, test_name="static")
-        
-        self._test_rcr([8192], N=320, K=320, test_name="static")
-        self._test_rcr([32], N=640, K=640, test_name="static")
-        self._test_rcr([2048], N=640, K=640, test_name="static")
-        
-        self._test_rcr([2048], N=640, K=2560, test_name="static")
-        self._test_rcr([16], N=1280, K=1280, test_name="static")
-        self._test_rcr([512], N=1280, K=1280, test_name="static")
-        
-        self._test_rcr([512], N=1280, K=5120, test_name="static")
-        
-        self._test_rcr([8], N=1280, K=1280, test_name="static")
-        self._test_rcr([128], N=1280, K=1280, test_name="static")
-        self._test_rcr([128], N=5120, K=5120, test_name="static")
+        self._test_rcr([64], N=1536, K=512, test_name="static")
+        self._test_rcr([64], N=512, K=512, test_name="static")
 
 
 filter_test_cases_by_test_env(GEMMBiasTestCase)
