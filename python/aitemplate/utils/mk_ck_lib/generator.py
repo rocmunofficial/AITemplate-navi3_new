@@ -41,7 +41,7 @@ def CreateConv2dFwdOperator(manifest, operation_kind, out_element_op, out_data_o
 
     in_element_op = library.TensorOperation.PassThrough
 
-    if Target.current().get_device_name() == "gfx1100":
+    if Target.current().get_device_name() in ["gfx1100", "gfx1101", "gfx1102"]:
         tile_descriptions = [
             conv.GroupTileDesc(1, 256, 256, 128, 64, 8, 0, 16, 16, 8, 2),
             conv.GroupTileDesc(1, 256, 256, 128, 32, 8, 0, 16, 16, 8, 2),
@@ -156,7 +156,7 @@ def CreateConv2dFwdOperator(manifest, operation_kind, out_element_op, out_data_o
         conv.Conv2DSpecialization.ConvFwd1x1S1P0,
     ]
 
-    if Target.current().get_device_name() == "gfx1100":
+    if Target.current().get_device_name() in ["gfx1100", "gfx1101", "gfx1102"]:
         gemm_specialization = [
             # conv.Conv2DSpecialization.GemmDefault, Have unknown issue with OddC
             conv.Conv2DSpecialization.MNKPadding,
@@ -196,7 +196,7 @@ def CreateConv2dFwdOperator(manifest, operation_kind, out_element_op, out_data_o
 
     conv2d_specialization = [conv.Conv2DSpecialization.ConvFwdOddC]
 
-    if Target.current().get_device_name() == "gfx1100":
+    if Target.current().get_device_name() in ["gfx1100", "gfx1101", "gfx1102"]:
         tile_descriptions = [
             conv.GroupTileDesc(1, 256, 128, 64, 32, 8, 0, 16, 16, 4, 1),
             conv.GroupTileDesc(1, 256, 128, 64, 64, 8, 0, 16, 16, 4, 1),
@@ -496,7 +496,7 @@ def CreateGemmRRROperator(manifest):
     )
     element_op = library.TensorOperation.PassThrough
 
-    if Target.current().get_device_name() == "gfx1100":
+    if Target.current().get_device_name() in ["gfx1100", "gfx1101", "gfx1102"]:
         tile_descriptions = [
             gemm.TileDesc(256, 128, 256, 64, 8, 0, 16, 16, 4, 4),
             gemm.TileDesc(256, 256, 128, 64, 8, 0, 16, 16, 8, 2),
@@ -580,7 +580,7 @@ def CreateGemmRRROperator(manifest):
     ]
     operations = []
 
-    if Target.current().get_device_name() == "gfx1100":
+    if Target.current().get_device_name() in ["gfx1100", "gfx1101", "gfx1102"]:
         op_type = gemm.OpType.DeviceGemmWmma_CShuffle 
     else:
         op_type = gemm.OpType.DeviceGemmXdl_CShuffle
@@ -626,7 +626,7 @@ def CreateGemmRCROperator(manifest):
     )
     element_op = library.TensorOperation.PassThrough
 
-    if Target.current().get_device_name() == "gfx1100":
+    if Target.current().get_device_name() in ["gfx1100", "gfx1101", "gfx1102"]:
         tile_descriptions = [
             gemm.TileDesc(256, 128, 256, 64, 8, 0, 16, 16, 4, 4),
             gemm.TileDesc(256, 256, 128, 64, 8, 0, 16, 16, 8, 2),
@@ -695,7 +695,7 @@ def CreateGemmRCROperator(manifest):
     ]
     operations = []
 
-    if Target.current().get_device_name() == "gfx1100":
+    if Target.current().get_device_name() in ["gfx1100", "gfx1101", "gfx1102"]:
         op_type = gemm.OpType.DeviceGemmWmma_CShuffle 
     else:
         op_type = gemm.OpType.DeviceGemmXdl_CShuffle
@@ -763,7 +763,7 @@ def CreateGemmRCRBillinearOperator(manifest, c_element_op):
     e_dtype = library.DataType.f16
     element_op = library.TensorOperation.PassThrough
     # 0 indicates not print
-    if Target.current().get_device_name() == "gfx1100":
+    if Target.current().get_device_name() in ["gfx1100", "gfx1101", "gfx1102"]:
         tile_descriptions = [
             gemm.TileDesc(256, 128, 256, 64, 8, 0, 16, 16, 4, 4),
             gemm.TileDesc(256, 256, 128, 32, 8, 0, 16, 16, 8, 2),
@@ -855,7 +855,7 @@ def CreateGemmRCRBillinearOperator(manifest, c_element_op):
     ]
     operations = []
 
-    if Target.current().get_device_name() == "gfx1100":
+    if Target.current().get_device_name() in ["gfx1100", "gfx1101", "gfx1102"]:
         op_type = gemm.OpType.DeviceGemmMultipleD_Wmma_CShuffle 
     else:
         op_type = gemm.OpType.DeviceGemmMultipleD_Xdl_CShuffle
@@ -1256,7 +1256,7 @@ def CreateGemmRCRm2n3PermOperator(manifest, c_element_op):
     e_dtype = library.DataType.f16
     element_op = library.TensorOperation.PassThrough
     # 0 indicates not print
-    if Target.current().get_device_name() == "gfx1100":
+    if Target.current().get_device_name() in ["gfx1100", "gfx1101", "gfx1102"]:
         tile_descriptions = [
             gemm.TileDesc(256, 128, 256, 64, 8, 0, 16, 16, 4, 4),
             gemm.TileDesc(256, 256, 128, 64, 8, 0, 16, 16, 8, 2),
@@ -1350,7 +1350,7 @@ def CreateGemmRCRm2n3PermOperator(manifest, c_element_op):
     ]
     operations = []
 
-    if Target.current().get_device_name() == "gfx1100":
+    if Target.current().get_device_name() in ["gfx1100", "gfx1101", "gfx1102"]:
         op_type = gemm.OpType.DeviceBatchedContractionMultipleD_Wmma_CShuffle 
     else:
         op_type = gemm.OpType.DeviceBatchedContractionMultipleD_Xdl_CShuffle
@@ -1397,7 +1397,7 @@ def CreateGemmRCRm3n2PermOperator(manifest, c_element_op):
     e_dtype = library.DataType.f16
     element_op = library.TensorOperation.PassThrough
     # 0 indicates not print
-    if Target.current().get_device_name() == "gfx1100":
+    if Target.current().get_device_name() in ["gfx1100", "gfx1101", "gfx1102"]:
         tile_descriptions = [
             gemm.TileDesc(256, 128, 256, 64, 8, 0, 16, 16, 4, 4),
             gemm.TileDesc(256, 256, 128, 64, 8, 0, 16, 16, 8, 2),
@@ -1491,7 +1491,7 @@ def CreateGemmRCRm3n2PermOperator(manifest, c_element_op):
     ]
     operations = []
 
-    if Target.current().get_device_name() == "gfx1100":
+    if Target.current().get_device_name() in ["gfx1100", "gfx1101", "gfx1102"]:
         op_type = gemm.OpType.DeviceBatchedContractionMultipleD_Wmma_CShuffle 
     else:
         op_type = gemm.OpType.DeviceBatchedContractionMultipleD_Xdl_CShuffle
@@ -1730,7 +1730,7 @@ def CreateBmmSoftmaxBmmPermOperator(
         library.DataType.f16, library.LayoutType.RowMajor
     )
     element_op = library.TensorOperation.PassThrough
-    if Target.current().get_device_name() == "gfx1100":
+    if Target.current().get_device_name() in ["gfx1100", "gfx1101", "gfx1102"]:
         op_type = gemm.OpType.DeviceBatchedGemmSoftmaxGemmPermute_Wmma_CShuffle
         
         tile_descriptions = [
@@ -1805,9 +1805,10 @@ def CreateBmmSoftmaxBmmPermOperator(
 
     c_block_descriptions, b1_block_descriptions = [], []
     for i in range(len(tile_descriptions)):
-        if Target.current().get_device_name() == "gfx1100":
-            if i <2:
-                block_transfer = [4, 8, 8]
+            if Target.current().get_device_name() in ["gfx1100", "gfx1101", "gfx1102"]:
+                        if i <1:
+                            block_transfer = [2, 16, 8]
+                            src_vector_read = 1
                 c_block_transfer = gemm.MaskedCBlockTransferDesc(
                     1, 2, [1, 64, 1, 4], 8, causal_mask_flag
                 )
@@ -1854,7 +1855,7 @@ def CreateBmmSoftmaxBmmPermOperator(
     gemm_specialization = []
     for i in range(len(tile_descriptions)):
         if i < 12:
-            if Target.current().get_device_name() == "gfx1100":
+            if Target.current().get_device_name() in ["gfx1100", "gfx1101", "gfx1102"]:
                 gemm_specialization.append(gemm.GemmSpecialization.MNKOPadding)
             else:
                 gemm_specialization.append(gemm.GemmSpecialization.GemmDefault)
@@ -1865,7 +1866,8 @@ def CreateBmmSoftmaxBmmPermOperator(
 
     operations = []
     extra_op = element_op if causal_mask_flag == 0 else causal_mask
-    for tile_desc, block_desc, b1_block_desc, c_block_desc, gemm_spec in zip(
+    if Target.current().get_device_name() in ["gfx1100", "gfx1101", "gfx1102"]:
+        for tile_desc, a_block_desc, b0_block_desc, b1_block_desc, c_block_desc, gemm_spec in zip(
         tile_descriptions,
         block_descriptions,
         b1_block_descriptions,
@@ -2715,7 +2717,7 @@ def CreateGroupNormOperator(manifest, rank=5):
 
 def GenerateTensorOp(manifest):
     # Conv2d
-    if Target.current().get_device_name() == "gfx1100":
+    if Target.current().get_device_name() in ["gfx1100", "gfx1101", "gfx1102"]:
         CreateConv2dFwdOperator(
             manifest,
             library.Conv2dKind.GroupConv2dBiasReluWmma,
@@ -2920,4 +2922,10 @@ def GenerateGFX90A(manifest, rocm_version):
 
 
 def GenerateGFX1100(manifest, rocm_version):
+    GenerateTensorOp(manifest)
+
+def GenerateGFX1101(manifest, rocm_version):
+    GenerateTensorOp(manifest)
+
+def GenerateGFX1102(manifest, rocm_version):
     GenerateTensorOp(manifest)
